@@ -1,0 +1,165 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@1,700;1,800;1,900&family=Inter:wght@700;900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: transparent;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  user-select: none;
+}
+
+.goal-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.goal-container.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.goal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 70%, transparent 100%);
+  animation: backdropPulse 2s infinite alternate;
+}
+
+.light-ray {
+  position: absolute;
+  width: 200%;
+  height: 120px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+  transform: rotate(-25deg);
+  pointer-events: none;
+}
+
+.light-ray-1 {
+  top: 30%;
+  animation: sweep 2.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.light-ray-2 {
+  top: 55%;
+  animation: sweep 2.5s cubic-bezier(0.16, 1, 0.3, 1) infinite 0.5s;
+}
+
+@keyframes sweep {
+  0% { transform: translateX(-100%) rotate(-25deg); }
+  100% { transform: translateX(100%) rotate(-25deg); }
+}
+
+.goal-card {
+  position: relative;
+  width: 820px;
+  height: 240px;
+  background: rgba(11, 15, 29, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(225, 29, 72, 0.3);
+  display: flex;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  transform: scale(0.85) translateY(40px);
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.goal-container.active .goal-card {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.team-stripe {
+  width: 14px;
+  height: 100%;
+  background: #e11d48;
+  box-shadow: 0 0 25px #e11d48;
+}
+
+.goal-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 44px;
+}
+
+.goal-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 2px;
+}
+
+.team-title {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.goal-badge {
+  background: #f59e0b;
+  color: #000000;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  padding: 3px 12px;
+  border-radius: 4px;
+}
+
+.goal-main-text {
+  font-family: 'Chakra Petch', sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  font-size: 96px;
+  line-height: 0.95;
+  letter-spacing: 6px;
+  color: #ffffff;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(0,0,0,0.8);
+  animation: glowText 1.5s infinite alternate;
+}
+
+@keyframes glowText {
+  0% { text-shadow: 0 0 20px rgba(255, 255, 255, 0.4); }
+  100% { text-shadow: 0 0 45px rgba(255, 255, 255, 0.9), 0 0 80px rgba(225, 29, 72, 0.6); }
+}
+
+.goal-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+}
+
+.player-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 1px;
+}
+
+.score-tag {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 1.5px;
+}

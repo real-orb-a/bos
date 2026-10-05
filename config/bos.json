@@ -1,0 +1,88 @@
+{
+  "obs": {
+    "host": "localhost",
+    "port": 4455,
+    "password": "Adam@123",
+    "autoReconnect": true,
+    "reconnectIntervalMs": 3000
+  },
+  "teams": {
+    "home": {
+      "name": "GARNET",
+      "short": "GAR",
+      "color": "#e11d48",
+      "secondaryColor": "#881337",
+      "score": 1,
+      "logo": ""
+    },
+    "away": {
+      "name": "TOPAZ",
+      "short": "TOP",
+      "color": "#0284c7",
+      "secondaryColor": "#0c4a6e",
+      "score": 1,
+      "logo": ""
+    }
+  },
+  "scenes": {
+    "liveScene": "LIVE",
+    "replayScene": "REPLAY",
+    "graphicsScene": "GRAPHICS",
+    "replayMediaSource": "Replay Video"
+  },
+  "replay": {
+    "enabled": true,
+    "hotkeyName": "ReplayBuffer.Save",
+    "contextName": "Game Capture - Source Record",
+    "captureSources": [
+      {
+        "id": "main",
+        "name": "Main Program",
+        "enabled": true,
+        "hotkeyName": "ReplayBuffer.Save",
+        "contextName": ""
+      },
+      {
+        "id": "cam1",
+        "name": "Camera 1",
+        "enabled": false,
+        "hotkeyName": "ReplayBuffer.Save",
+        "contextName": ""
+      },
+      {
+        "id": "cam2",
+        "name": "Camera 2",
+        "enabled": false,
+        "hotkeyName": "ReplayBuffer.Save",
+        "contextName": ""
+      }
+    ]
+  },
+  "graphics": {
+    "httpPort": 8088,
+    "wsPort": 8088,
+    "defaultLowerThirdDuration": 5,
+    "animationStyle": "slide-in"
+  },
+  "transitions": {
+    "defaultTransition": "Fade",
+    "durationMs": 300
+  },
+  "hotkeys": {
+    "garnetGoal": "KeyG",
+    "topazGoal": "KeyT",
+    "quickReplay": "KeyR",
+    "returnLive": "KeyL",
+    "underReview": "KeyU",
+    "hideLowerThird": "KeyH",
+    "clockToggle": "Space"
+  },
+  "goalWorkflow": {
+    "showGoalAnimation": true,
+    "goalAnimationDuration": 3,
+    "celebrationDurationSeconds": 3,
+    "captureReplayOnGoal": true,
+    "replaySourceId": "",
+    "autoReturnLive": true
+  }
+}

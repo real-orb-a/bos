@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BOS Replay Overlay</title>
+  <link rel="stylesheet" href="replay.css">
+</head>
+<body>
+  <div id="replay-overlay" class="replay-overlay hidden">
+    <div class="replay-badge">
+      <span class="live-dot"></span>
+      <span class="replay-label">REPLAY</span>
+    </div>
+    <div class="replay-info">
+      <span class="replay-speed" id="replay-speed">1×</span>
+      <span class="replay-camera" id="replay-camera"></span>
+      <span class="replay-title" id="replay-title">HIGHLIGHT</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <script src="replay.js"></script>
+</body>
+</html>

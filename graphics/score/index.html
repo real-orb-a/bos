@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BOS Score Bug</title>
+  <link rel="stylesheet" href="score.css">
+</head>
+<body>
+  <div id="score-bug" class="score-bug">
+    <div class="team team-home" id="team-home">
+      <div class="team-color-bar" id="home-bar"></div>
+      <div class="team-meta">
+        <span class="team-short" id="home-short">GAR</span>
+        <span class="team-name" id="home-name">GARNET</span>
+      </div>
+      <div class="team-score-wrapper">
+        <span class="team-score" id="home-score">0</span>
+      </div>
+    </div>
+
+    <div class="match-info">
+      <div class="clock-display" id="clock-display">00:00</div>
+      <div class="period-display" id="period-display">1ST</div>
+    </div>
+
+    <div class="team team-away" id="team-away">
+      <div class="team-score-wrapper">
+        <span class="team-score" id="away-score">0</span>
+      </div>
+      <div class="team-meta">
+        <span class="team-short" id="away-short">TOP</span>
+        <span class="team-name" id="away-name">TOPAZ</span>
+      </div>
+      <div class="team-color-bar" id="away-bar"></div>
+    </div>
+  </div>
+
+  <script src="score.js"></script>
+</body>
+</html>

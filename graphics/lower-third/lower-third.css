@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@700;800&family=Inter:wght@600;700;800;900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: transparent;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  user-select: none;
+}
+
+.lower-third {
+  position: absolute;
+  display: flex;
+  align-items: stretch;
+  background: rgba(13, 17, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0,0,0,0.5);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  max-width: 680px;
+  min-width: 360px;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Positions */
+.lower-third.bottom-left {
+  bottom: 60px;
+  left: 60px;
+}
+
+.lower-third.bottom-center {
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.lower-third.bottom-right {
+  bottom: 60px;
+  right: 60px;
+}
+
+.lower-third.top-center {
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Animations */
+.lower-third.hidden {
+  opacity: 0;
+  transform: translateY(30px) scale(0.95);
+  pointer-events: none;
+}
+.lower-third.bottom-center.hidden,
+.lower-third.top-center.hidden {
+  transform: translate(-50%, 30px) scale(0.95);
+}
+
+.accent-bar {
+  width: 8px;
+  background: #38bdf8;
+  transition: background-color 0.3s;
+}
+
+.content-wrapper {
+  padding: 14px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  margin-bottom: 2px;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.6; }
+}
+
+.badge-text {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.title {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #ffffff;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.subtitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+/* Alert / Warning Review Style */
+.lower-third.style-alert {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(245, 158, 11, 0.25);
+}
+.lower-third.style-alert .accent-bar {
+  background: #f59e0b;
+}
+.lower-third.style-alert .pulse-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+}
+.lower-third.style-alert .status-badge {
+  background: rgba(245, 158, 11, 0.2);
+}
+.lower-third.style-alert .badge-text {
+  color: #fbbf24;
+}
+
+/* F1 Style Banner */
+.lower-third.style-f1-banner {
+  border-color: rgba(34, 197, 94, 0.5);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.8), 0 0 25px rgba(34, 197, 94, 0.3);
+}
+.lower-third.style-f1-banner .accent-bar {
+  background: #22c55e;
+}
+.lower-third.style-f1-banner .pulse-dot {
+  background: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+}
+.lower-third.style-f1-banner .status-badge {
+  background: rgba(34, 197, 94, 0.2);
+}
+.lower-third.style-f1-banner .badge-text {
+  color: #4ade80;
+}

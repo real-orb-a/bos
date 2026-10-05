@@ -1,0 +1,28 @@
+{
+  "name": "bos",
+  "version": "1.0.0",
+  "description": "BOS — Broadcast Operator System. Professional desktop broadcast-control and automation layer for OBS.",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "broadcast",
+    "obs",
+    "replay",
+    "sports",
+    "graphics",
+    "scoreboard",
+    "automation",
+    "electron"
+  ],
+  "author": "BOS Engineering",
+  "license": "ISC",
+  "dependencies": {
+    "electron": "^41.2.0",
+    "obs-websocket-js": "^5.0.6",
+    "ws": "^8.18.3"
+  }
+}

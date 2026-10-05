@@ -1,0 +1,19 @@
+{
+  "name": "ssl_media_2026",
+  "version": "1.0.0",
+  "displayName": "SSL Media 2026 Broadcast Theme",
+  "description": "Official SSL 2026 High-Impact Broadcast Graphics & Transition Package for BOS",
+  "author": "SSL Media Team",
+  "graphics": {
+    "score": "score/index.html",
+    "goal": "goal/index.html",
+    "replay": "replay/index.html",
+    "lowerThird": "lower-third/index.html",
+    "transitions": "transitions/index.html"
+  },
+  "branding": {
+    "primaryColor": "#e11d48",
+    "secondaryColor": "#0284c7",
+    "fontFamily": "Chakra Petch, Inter, sans-serif"
+  }
+}

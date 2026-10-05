@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOS — Broadcast Operator System</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body class="theme-dark">
+  <!-- Top Master Broadcast Header -->
+  <header class="master-header">
+    <div class="header-left">
+      <div class="app-brand">
+        <span class="brand-title">BOS</span>
+        <span class="brand-subtitle">BROADCAST OPERATOR SYSTEM</span>
+      </div>
+
+      <div class="program-monitor-badge" id="program-status-badge">
+        <span class="monitor-dot" id="program-dot"></span>
+        <span class="monitor-text" id="program-text">PROGRAM: LIVE</span>
+      </div>
+
+      <div class="scene-pill" id="active-scene-pill">
+        <span class="pill-label">SCENE:</span>
+        <span class="pill-value" id="current-scene-name">LIVE</span>
+      </div>
+
+      <div class="transition-pill" id="transition-pill">
+        <span class="pill-label">TRANSITION:</span>
+        <span class="pill-value" id="current-transition-info">FADE (300ms)</span>
+      </div>
+    </div>
+
+    <!-- Master Clock in Header -->
+    <div class="header-center">
+      <div class="master-clock-container">
+        <button class="clock-action-btn" id="btn-clock-toggle" title="Spacebar: Start/Pause">
+          <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </button>
+        <div class="master-clock-display" id="master-clock-display">00:00</div>
+        <div class="master-period-display" id="master-period-display">1ST HALF</div>
+        <button class="clock-action-btn secondary" id="btn-clock-reset" title="Reset Clock">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="obs-status-indicator" id="obs-status-indicator">
+        <span class="obs-dot" id="obs-dot"></span>
+        <span class="obs-label" id="obs-label">OBS ● CONNECTING...</span>
+        <span class="obs-ping" id="obs-ping">-- ms</span>
+        <button class="obs-reconnect-btn" id="btn-obs-reconnect" title="Reconnect OBS">↺</button>
+      </div>
+
+      <button class="emergency-abort-btn" id="btn-emergency-abort" title="Hotkey: L">
+        <span class="emergency-icon">⚠</span>
+        <span>RETURN TO LIVE</span>
+      </button>
+
+      <button class="settings-trigger-btn" id="btn-open-settings" title="Settings">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Automated Goal Sequence Banner (Shows during active sequence) -->
+  <div class="active-sequence-bar hidden" id="active-sequence-bar">
+    <div class="sequence-info">
+      <span class="sequence-pulse"></span>
+      <span class="sequence-title" id="seq-title">AUTOMATED GOAL SEQUENCE IN PROGRESS</span>
+      <span class="sequence-step-pill" id="seq-step-pill">PREPARING REPLAY</span>
+    </div>
+    <button class="sequence-abort-btn" id="btn-abort-sequence">SKIP / CANCEL SEQUENCE</button>
+  </div>
+
+  <!-- Main 3-Column Operator Workspace -->
+  <main class="operator-workspace">
+    
+    <!-- COLUMN 1: MATCH CONTROLS & GOAL TRIGGERS -->
+    <section class="workspace-col col-match">
+      <div class="card-panel">
+        <div class="panel-header">
+          <h2>MATCH CONTROLS</h2>
+          <span class="panel-badge">OFFICIAL</span>
+        </div>
+
+        <!-- Match State Selector -->
+        <div class="form-group">
+          <label>MATCH STATE</label>
+          <select id="select-match-state" class="styled-select">
+            <option value="PRE_MATCH">PRE_MATCH</option>
+            <option value="LIVE" selected>LIVE</option>
+            <option value="HALF_TIME">HALF_TIME</option>
+            <option value="LIVE_SECOND_HALF">LIVE_SECOND_HALF</option>
+            <option value="FULL_TIME">FULL_TIME</option>
+            <option value="BREAK">BREAK</option>
+            <option value="DELAYED">DELAYED</option>
+            <option value="UNDER_REVIEW">UNDER_REVIEW</option>
+          </select>
+        </div>
+
+        <!-- Period Selector & Stoppage Time -->
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>PERIOD</label>
+            <select id="select-period" class="styled-select">
+              <option value="1st Half">1st Half</option>
+              <option value="2nd Half">2nd Half</option>
+              <option value="Extra Time">Extra Time</option>
+              <option value="Penalties">Penalties</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label>STOPPAGE</label>
+            <div class="stoppage-buttons">
+              <button class="stoppage-btn" data-min="0">0</button>
+              <button class="stoppage-btn" data-min="2">+2</button>
+              <button class="stoppage-btn" data-min="3">+3</button>
+              <button class="stoppage-btn" data-min="5">+5</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- DEDICATED GOAL BUTTONS (Section 9) -->
+        <div class="goal-triggers-container">
+          <div class="goal-trigger-box home-box">
+            <div class="team-label" id="card-home-name">GARNET</div>
+            <button class="master-goal-btn home-goal" id="btn-garnet-goal" title="Hotkey: G">
+              <span class="btn-text">GARNET GOAL</span>
+              <span class="hotkey-pill">G</span>
+            </button>
+            <div class="score-adjuster">
+              <button class="score-mod-btn" id="btn-sub-home">-</button>
+              <span class="score-num" id="display-home-score">0</span>
+              <button class="score-mod-btn" id="btn-add-home">+</button>
+            </div>
+          </div>
+
+          <div class="goal-trigger-box away-box">
+            <div class="team-label" id="card-away-name">TOPAZ</div>
+            <button class="master-goal-btn away-goal" id="btn-topaz-goal" title="Hotkey: T">
+              <span class="btn-text">TOPAZ GOAL</span>
+              <span class="hotkey-pill">T</span>
+            </button>
+            <div class="score-adjuster">
+              <button class="score-mod-btn" id="btn-sub-away">-</button>
+              <span class="score-num" id="display-away-score">0</span>
+              <button class="score-mod-btn" id="btn-add-away">+</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reset Score / Quick Sync -->
+        <div class="card-footer-actions">
+          <button class="action-btn-secondary" id="btn-reset-score">RESET SCORE</button>
+          <button class="action-btn-secondary" id="btn-switch-live-scene">SWITCH SCENE: LIVE</button>
+        </div>
+      </div>
+
+      <!-- Match Events Stream (Section 19) -->
+      <div class="card-panel events-panel flex-1">
+        <div class="panel-header">
+          <h2>EVENT LOG</h2>
+          <button class="text-btn" id="btn-clear-events">CLEAR</button>
+        </div>
+        <div class="event-feed" id="event-feed-list">
+          <!-- Dynamic Event Items -->
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 2: DYNAMIC BROADCAST MESSAGES & LOWER THIRDS -->
+    <section class="workspace-col col-graphics">
+      <div class="card-panel">
+        <div class="panel-header">
+          <h2>BROADCAST MESSAGE / LOWER-THIRD</h2>
+          <span class="panel-badge">ON AIR GRAPHIC</span>
+        </div>
+
+        <!-- Active Graphic Countdown -->
+        <div class="active-graphic-status" id="active-graphic-card">
+          <span class="status-indicator-dot" id="lt-status-dot"></span>
+          <div class="status-meta">
+            <div class="status-title" id="active-lt-title">NO GRAPHIC ON AIR</div>
+            <div class="status-timer" id="active-lt-timer">READY</div>
+          </div>
+          <button class="btn-hide-active" id="btn-hide-lowerthird" title="Hotkey: H">HIDE</button>
+        </div>
+
+        <!-- Custom Message Inputs -->
+        <div class="form-group">
+          <label>TITLE</label>
+          <input type="text" id="input-lt-title" class="styled-input" placeholder="e.g. UNDER REVIEW" value="UNDER REVIEW">
+        </div>
+
+        <div class="form-group">
+          <label>SUBTITLE</label>
+          <input type="text" id="input-lt-subtitle" class="styled-input" placeholder="e.g. DECISION PENDING" value="DECISION PENDING">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>DURATION (SEC)</label>
+            <input type="number" id="input-lt-duration" class="styled-input" value="5" min="1" max="60">
+          </div>
+          <div class="form-group flex-1">
+            <label>POSITION</label>
+            <select id="select-lt-position" class="styled-select">
+              <option value="bottom-left" selected>Bottom Left</option>
+              <option value="bottom-center">Bottom Center</option>
+              <option value="bottom-right">Bottom Right</option>
+              <option value="top-center">Top Center</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label>STYLE</label>
+            <select id="select-lt-style" class="styled-select">
+              <option value="alert" selected>Alert (Review)</option>
+              <option value="standard">Standard</option>
+              <option value="f1-banner">F1 Banner</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button class="primary-action-btn" id="btn-show-lowerthird">SHOW ON AIR</button>
+          <button class="secondary-action-btn" id="btn-queue-lowerthird">ENQUEUE</button>
+        </div>
+
+        <!-- Quick Presets (Section 20 & 22) -->
+        <div class="preset-section">
+          <label class="section-label">QUICK BROADCAST PRESETS</label>
+          <div class="preset-grid" id="preset-buttons-container">
+            <!-- Dynamic Presets -->
+          </div>
+        </div>
+
+        <!-- Graphics Queue (Section 23) -->
+        <div class="queue-section">
+          <div class="queue-header">
+            <label class="section-label">GRAPHICS QUEUE</label>
+            <button class="text-btn" id="btn-clear-queue">CLEAR</button>
+          </div>
+          <div class="queue-list" id="graphics-queue-list">
+            <div class="empty-queue-hint">Queue is empty</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 3: REPLAY ENGINE & TIMELINE -->
+    <section class="workspace-col col-replay">
+      <div class="card-panel">
+        <div class="panel-header">
+          <h2>REPLAY CAPTURE</h2>
+          <span class="replay-state-pill" id="replay-state-pill">IDLE</span>
+        </div>
+
+        <!-- Source Record replay request state (the REQUEST, not any footage) -->
+        <div class="replay-request-card">
+          <div class="replay-request-status" id="replay-request-status">
+            <span class="replay-request-dot" id="replay-request-dot"></span>
+            <span class="replay-request-text" id="replay-request-text">Ready — Source Record owns the replay buffer.</span>
+          </div>
+          <div class="replay-request-detail" id="replay-request-detail">No replay save requested yet.</div>
+        </div>
+
+        <div class="button-row">
+          <button class="primary-action-btn replay-btn" id="btn-save-replay" title="Hotkey: R">
+            <span>● SAVE REPLAY</span>
+            <span class="hotkey-pill">R</span>
+          </button>
+        </div>
+        <div class="replay-sub-hint">Triggers the Source Record “Save Replay Buffer” hotkey in OBS via WebSocket. BOS does not record or generate the video itself.</div>
+
+        <!-- Per-source quick save (each capture source can define its own hotkey) -->
+        <div class="replay-sources-section">
+          <label class="section-label">CAPTURE SOURCES</label>
+          <div class="replay-source-buttons" id="replay-source-buttons">
+            <div class="empty-queue-hint">Loading sources…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Live Graphics Preview Drawer (Collapsible) -->
+  <div class="preview-drawer-wrapper">
+    <div class="preview-drawer-header" id="preview-drawer-toggle">
+      <div class="drawer-title">
+        <span class="preview-icon">👁</span>
+        <span>LIVE BROWSER SOURCE PREVIEWS (OBS STUDIO)</span>
+      </div>
+      <div class="drawer-controls">
+        <span class="drawer-status" id="browser-sources-url">http://localhost:8088/graphics/...</span>
+        <button class="toggle-btn" id="btn-toggle-drawer">▲ SHOW PREVIEWS</button>
+      </div>
+    </div>
+    <div class="preview-drawer-body hidden" id="preview-drawer-body">
+      <div class="preview-grid">
+        <div class="preview-item">
+          <div class="preview-label">SCORE BUG (/graphics/score/)</div>
+          <iframe src="http://localhost:8088/graphics/score/" id="iframe-score" class="preview-iframe"></iframe>
+        </div>
+        <div class="preview-item">
+          <div class="preview-label">LOWER THIRD (/graphics/lower-third/)</div>
+          <iframe src="http://localhost:8088/graphics/lower-third/" id="iframe-lt" class="preview-iframe"></iframe>
+        </div>
+        <div class="preview-item">
+          <div class="preview-label">GOAL CELEBRATION (/graphics/goal/)</div>
+          <iframe src="http://localhost:8088/graphics/goal/" id="iframe-goal" class="preview-iframe"></iframe>
+        </div>
+        <div class="preview-item">
+          <div class="preview-label">REPLAY OVERLAY (/graphics/replay/)</div>
+          <iframe src="http://localhost:8088/graphics/replay/" id="iframe-replay" class="preview-iframe"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings & Configuration Modal (Section 29) -->
+  <div class="modal-backdrop hidden" id="settings-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h2>BROADCAST CONFIGURATION (bos.json)</h2>
+        <button class="modal-close-btn" id="btn-close-settings">✕</button>
+      </div>
+      <div class="modal-content">
+        <!-- Tabs -->
+        <div class="modal-tabs">
+          <button class="tab-btn active" data-tab="tab-obs">OBS WebSocket</button>
+          <button class="tab-btn" data-tab="tab-teams">Teams & Branding</button>
+          <button class="tab-btn" data-tab="tab-workflow">Goal Automation</button>
+          <button class="tab-btn" data-tab="tab-hotkeys">Hotkeys</button>
+        </div>
+
+        <!-- Tab: OBS -->
+        <div class="tab-pane active" id="tab-obs">
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label>OBS HOST</label>
+              <input type="text" id="cfg-obs-host" class="styled-input" value="localhost">
+            </div>
+            <div class="form-group flex-1">
+              <label>PORT</label>
+              <input type="number" id="cfg-obs-port" class="styled-input" value="4455">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>PASSWORD</label>
+            <input type="password" id="cfg-obs-password" class="styled-input" placeholder="Leave blank if disabled">
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>LIVE SCENE NAME</label>
+              <input type="text" id="cfg-scene-live" class="styled-input" value="LIVE">
+            </div>
+            <div class="form-group flex-1">
+              <label>REPLAY SCENE NAME</label>
+              <input type="text" id="cfg-scene-replay" class="styled-input" value="REPLAY">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>REPLAY MEDIA SOURCE NAME (for future replay airing)</label>
+            <input type="text" id="cfg-media-source" class="styled-input" value="Replay Video">
+          </div>
+
+          <hr class="settings-divider">
+          <h3>SOURCE RECORD REPLAY CAPTURE</h3>
+          <div class="checkbox-row">
+            <input type="checkbox" id="cfg-replay-enabled" checked>
+            <label for="cfg-replay-enabled">Enable replay save trigger (Source Record)</label>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>HOTKEY NAME</label>
+              <input type="text" id="cfg-replay-hotkey" class="styled-input" value="ReplayBuffer.Save">
+            </div>
+            <div class="form-group flex-1">
+              <label>CONTEXT NAME</label>
+              <input type="text" id="cfg-replay-context" class="styled-input" value="Game Capture - Source Record">
+            </div>
+          </div>
+          <label style="font-size:10px;color:var(--text-dim);">
+            BOS triggers Source Record's Save Replay Buffer hotkey via TriggerHotkeyByName.
+            Set the exact hotkey/context exposed by the Source Record filters in your OBS scene
+            collection (per-source overrides live in config/bos.json → replay.captureSources).
+          </label>
+        </div>
+
+        <!-- Tab: Teams -->
+        <div class="tab-pane" id="tab-teams">
+          <h3>HOME TEAM</h3>
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label>NAME</label>
+              <input type="text" id="cfg-team-home-name" class="styled-input" value="GARNET">
+            </div>
+            <div class="form-group flex-1">
+              <label>SHORT</label>
+              <input type="text" id="cfg-team-home-short" class="styled-input" value="GAR">
+            </div>
+            <div class="form-group flex-1">
+              <label>COLOR</label>
+              <input type="color" id="cfg-team-home-color" class="styled-color" value="#e11d48">
+            </div>
+          </div>
+
+          <h3 style="margin-top: 16px;">AWAY TEAM</h3>
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label>NAME</label>
+              <input type="text" id="cfg-team-away-name" class="styled-input" value="TOPAZ">
+            </div>
+            <div class="form-group flex-1">
+              <label>SHORT</label>
+              <input type="text" id="cfg-team-away-short" class="styled-input" value="TOP">
+            </div>
+            <div class="form-group flex-1">
+              <label>COLOR</label>
+              <input type="color" id="cfg-team-away-color" class="styled-color" value="#0284c7">
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Goal Automation Workflow -->
+        <div class="tab-pane" id="tab-workflow">
+          <div class="checkbox-row">
+            <input type="checkbox" id="cfg-goal-anim" checked>
+            <label for="cfg-goal-anim">Trigger Goal Graphic Animation</label>
+          </div>
+          <div class="form-group">
+            <label>CELEBRATION DURATION (SECONDS)</label>
+            <input type="number" id="cfg-celebration-dur" class="styled-input" value="3.0" step="0.5" min="0" max="15">
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="cfg-capture-replay" checked>
+            <label for="cfg-capture-replay">Trigger Source Record replay save on goal</label>
+          </div>
+          <div class="form-group">
+            <label>CAPTURE SOURCE ID (replay.captureSources entry, e.g. main)</label>
+            <input type="text" id="cfg-replay-source-id" class="styled-input" placeholder="main">
+          </div>
+        </div>
+
+        <!-- Tab: Hotkeys -->
+        <div class="tab-pane" id="tab-hotkeys">
+          <table class="hotkey-table">
+            <thead><tr><th>Action</th><th>Key</th></tr></thead>
+            <tbody>
+              <tr><td>Garnet Goal</td><td><span class="hotkey-badge">G</span></td></tr>
+              <tr><td>Topaz Goal</td><td><span class="hotkey-badge">T</span></td></tr>
+              <tr><td>Trigger Replay</td><td><span class="hotkey-badge">R</span></td></tr>
+              <tr><td>Emergency Return to Live</td><td><span class="hotkey-badge">L</span></td></tr>
+              <tr><td>Under Review (Quick)</td><td><span class="hotkey-badge">U</span></td></tr>
+              <tr><td>Hide Lower Third</td><td><span class="hotkey-badge">H</span></td></tr>
+              <tr><td>Start / Pause Match Clock</td><td><span class="hotkey-badge">Space</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="action-btn-secondary" id="btn-cancel-settings">CANCEL</button>
+        <button class="primary-action-btn" id="btn-save-settings">SAVE CONFIGURATION</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/match.js"></script>
+  <script src="js/replay.js"></script>
+  <script src="js/graphics.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
