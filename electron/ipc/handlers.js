@@ -70,9 +70,10 @@ function registerIpcHandlers({
   ipcMain.handle('match:clockPause', () => matchEngine.pauseClock());
   ipcMain.handle('match:clockToggle', () => matchEngine.toggleClock());
   ipcMain.handle('match:clockReset', () => matchEngine.resetClock());
-  ipcMain.handle('match:setClock', (_, { seconds, period, stoppageMinutes }) =>
-    matchEngine.setClock(seconds, period, stoppageMinutes)
+  ipcMain.handle('match:setClock', (_, data) =>
+    matchEngine.setClock(data || {})
   );
+  ipcMain.handle('match:setTimerMode', (_, mode) => matchEngine.setTimerMode(mode));
   ipcMain.handle('match:setPeriod', (_, period) => matchEngine.setPeriod(period));
 
   // --- Score IPC Handlers ---
@@ -100,6 +101,12 @@ function registerIpcHandlers({
   // --- Graphics IPC Handlers ---
   ipcMain.handle('graphics:showLowerThird', (_, data) => graphicsEngine.showLowerThird(data));
   ipcMain.handle('graphics:hideLowerThird', () => graphicsEngine.hideLowerThird());
+  ipcMain.handle('graphics:getTopMessage', () => ({
+    active: !!graphicsEngine.topMessageActive,
+    data: graphicsEngine.topMessageData
+  }));
+  ipcMain.handle('graphics:showTopMessage', (_, data) => graphicsEngine.showTopMessage(data));
+  ipcMain.handle('graphics:hideTopMessage', () => graphicsEngine.hideTopMessage());
   ipcMain.handle('graphics:getPresets', () => graphicsEngine.messages.getPresets());
   ipcMain.handle('graphics:getQueue', () => graphicsEngine.messages.getQueueState());
   ipcMain.handle('graphics:enqueue', (_, item) => graphicsEngine.messages.enqueue(item));

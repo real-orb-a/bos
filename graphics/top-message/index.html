@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BOS Top Message</title>
+  <link rel="stylesheet" href="top-message.css">
+</head>
+<body>
+  <!-- Top-zone copy of the F1 lower-third banner, anchored to the TOP of the
+       screen (centred by default, like the race-control banner reference). -->
+  <div id="top-message" class="top-message hidden top-center">
+    <div class="tm-banner">
+      <div class="tm-accent" id="tm-accent"></div>
+      <div class="tm-content">
+        <div class="tm-text">
+          <h2 class="tm-title" id="tm-title">BROADCAST MESSAGE</h2>
+          <p class="tm-subtitle" id="tm-subtitle"></p>
+        </div>
+        <div class="tm-side">
+          <span class="tm-side-label" id="badge-text">BROADCAST</span>
+          <span class="tm-side-value" id="tm-value"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="top-message.js"></script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@700;800&family=Inter:wght@600;700;800;900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: transparent;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  user-select: none;
+}
+
+/*
+ * Top-zone copy of the lower-third F1 banner (same skewed dark banner, accent
+ * stripe, accent title, caps subtitle and right-hand highlight block), anchored
+ * to the TOP of the screen — centred by default, like the race-control banner.
+ */
+.top-message {
+  position: absolute;
+  transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.55));
+}
+
+/* Positions */
+.top-message.top-left   { top: 56px; left: 56px; }
+.top-message.top-center { top: 56px; left: 50%; transform: translateX(-50%); }
+.top-message.top-right  { top: 56px; right: 56px; }
+
+/* Hidden state — lifts up out of view */
+.top-message.hidden {
+  opacity: 0;
+  transform: translateY(-40px);
+  pointer-events: none;
+}
+.top-message.top-center.hidden {
+  transform: translate(-50%, -40px);
+}
+
+/* Skewed banner */
+.tm-banner {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 420px;
+  transform: skewX(-12deg);
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 16px),
+    linear-gradient(180deg, rgba(15, 19, 32, 0.96) 0%, rgba(8, 11, 20, 0.97) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+/* Accent stripe — slanted with the banner, driven by the house colour */
+.tm-accent {
+  width: 7px;
+  background: var(--tm-accent, #38bdf8);
+  transition: background-color 0.3s;
+}
+
+/* Content is counter-skewed so the text stays upright */
+.tm-content {
+  transform: skewX(12deg);
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 12px 30px 12px 32px;
+}
+
+.tm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tm-title {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--tm-accent, #38bdf8);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+
+.tm-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+}
+
+/* Right-hand highlight block ("UP TO / 2ND" in the reference) */
+.tm-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding-left: 24px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.tm-side-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+}
+
+.tm-side-value {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--tm-accent, #38bdf8);
+  white-space: nowrap;
+}
+
+.tm-side-value:empty {
+  display: none;
+}
+
+/* Style accents (glow colour differs per style; layout is shared) */
+.top-message.style-alert .tm-banner {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 158, 11, 0.28);
+}
+.top-message.style-f1-banner .tm-banner {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7), 0 0 24px rgba(34, 197, 94, 0.28);
+}

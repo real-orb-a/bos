@@ -18,16 +18,22 @@ class LowerThirdGraphicsController extends EventEmitter {
     const position = data.position || 'bottom-left';
     const animation = data.animation || this.config.get('graphics.animationStyle') || 'slide-in';
     const style = data.style || 'standard'; // 'standard', 'f1-banner', 'alert'
+    const color = data.color || this.config.get('graphics.lowerThirdColor') || ''; // house accent
+    const badge = data.badge || ''; // right-block label (defaults to 'BROADCAST' in the overlay)
+    const value = data.value || ''; // right-block highlight value (e.g. "+2ND")
 
     this._clearTimers();
     this.isVisible = true;
     this.currentData = {
       title,
       subtitle,
+      badge,
+      value,
       duration,
       position,
       animation,
       style,
+      color,
       timestamp: Date.now()
     };
 

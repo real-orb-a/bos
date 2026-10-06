@@ -9,6 +9,7 @@
   const awayBarEl = document.getElementById('away-bar');
   const clockEl = document.getElementById('clock-display');
   const periodEl = document.getElementById('period-display');
+  const stoppageEl = document.getElementById('stoppage-display');
 
   let currentHomeScore = 0;
   let currentAwayScore = 0;
@@ -43,10 +44,22 @@
     }
 
     if (data.clock) {
-      clockEl.textContent = data.clock.formatted || '00:00';
-      if (data.clock.period) {
-        periodEl.textContent = data.clock.period.toUpperCase();
-      }
+      applyClock(data.clock);
+    }
+  }
+
+  function applyClock(clock) {
+    clockEl.textContent = clock.formatted || '00:00';
+    if (clock.period) {
+      periodEl.textContent = clock.period.toUpperCase();
+    }
+    // Additional-time overlay: appears below the clock once the set time is done
+    // and counts the added time (+1:00 → +N:00).
+    if (clock.inStoppage && clock.stoppageDisplay) {
+      stoppageEl.textContent = clock.stoppageDisplay;
+      stoppageEl.classList.remove('hidden');
+    } else {
+      stoppageEl.classList.add('hidden');
     }
   }
 
@@ -75,10 +88,7 @@
           updateDisplay(msg, msg.animation || 'pop', msg.changedTeam);
         } else if (msg.type === 'CLOCK_UPDATE') {
           if (msg.clock) {
-            clockEl.textContent = msg.clock.formatted || '00:00';
-            if (msg.clock.period) {
-              periodEl.textContent = msg.clock.period.toUpperCase();
-            }
+            applyClock(msg.clock);
           }
         }
       } catch (err) {

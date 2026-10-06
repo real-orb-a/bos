@@ -81,7 +81,7 @@ class ReplayEngine extends EventEmitter {
       this.emit('replayStateChanged', this.getStatus());
       return { ok: false, state: this.state, error: this.lastError };
     }
-    if (!this.obs.isConnected || this.obs.isMockMode) {
+    if (!this.obs.isConnected) {
       this.state = 'ERROR';
       this.lastError = 'OBS is not connected — cannot trigger the Source Record hotkey.';
       this.emit('replayStateChanged', this.getStatus());

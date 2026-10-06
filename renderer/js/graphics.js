@@ -4,12 +4,17 @@ window.GraphicsModule = (function() {
   const activeLtTitle = document.getElementById('active-lt-title');
   const activeLtTimer = document.getElementById('active-lt-timer');
   const btnHideLowerthird = document.getElementById('btn-hide-lowerthird');
+  const topMsgPill = document.getElementById('top-msg-pill');
+  const btnHideTopMessage = document.getElementById('btn-hide-top-message');
+  const selectMessageZone = document.getElementById('select-message-zone');
 
   const inputLtTitle = document.getElementById('input-lt-title');
   const inputLtSubtitle = document.getElementById('input-lt-subtitle');
+  const inputLtValue = document.getElementById('input-lt-value');
   const inputLtDuration = document.getElementById('input-lt-duration');
   const selectLtPosition = document.getElementById('select-lt-position');
   const selectLtStyle = document.getElementById('select-lt-style');
+  const inputLtColor = document.getElementById('input-lt-color');
 
   const btnShowLowerthird = document.getElementById('btn-show-lowerthird');
   const btnQueueLowerthird = document.getElementById('btn-queue-lowerthird');
@@ -33,6 +38,11 @@ window.GraphicsModule = (function() {
       window.bosAPI.graphics.hideLowerThird();
     });
 
+    btnHideTopMessage.addEventListener('click', () => {
+      window.bosAPI.graphics.hideTopMessage();
+      refreshTopPill();
+    });
+
     btnQueueLowerthird.addEventListener('click', () => {
       const item = getFormData();
       window.bosAPI.graphics.enqueue(item);
@@ -41,21 +51,54 @@ window.GraphicsModule = (function() {
     btnClearQueue.addEventListener('click', () => {
       window.bosAPI.graphics.clearQueue();
     });
+
+    // The top zone mirrors the centred race-control banner reference by default,
+    // so switching ZONE to "Top Message" parks the position on Center.
+    selectMessageZone.addEventListener('change', () => {
+      if (selectMessageZone.value === 'top') {
+        selectLtPosition.value = 'bottom-center';
+      }
+    });
   }
 
   function getFormData() {
+    // The ZONE picker decides which banner zone receives the message; positions
+    // are stored as bottom-* (lower third) and mapped to top-* for the top zone.
+    const isTop = selectMessageZone.value === 'top';
+    let position = selectLtPosition.value;
+    if (isTop) position = position.replace(/^bottom-/, 'top-');
     return {
       title: inputLtTitle.value.trim() || 'UNDER REVIEW',
       subtitle: inputLtSubtitle.value.trim(),
+      value: inputLtValue.value.trim(),
       duration: parseInt(inputLtDuration.value, 10) || 5,
-      position: selectLtPosition.value,
-      style: selectLtStyle.value
+      position,
+      style: selectLtStyle.value,
+      color: inputLtColor.value || '#eab308'
     };
   }
 
   function showCurrentMessage() {
     const data = getFormData();
-    window.bosAPI.graphics.showLowerThird(data);
+    if (selectMessageZone.value === 'top') {
+      window.bosAPI.graphics.showTopMessage(data);
+      refreshTopPill();
+    } else {
+      window.bosAPI.graphics.showLowerThird(data);
+    }
+  }
+
+  async function refreshTopPill() {
+    try {
+      const state = await window.bosAPI.graphics.getTopMessage();
+      if (state && state.active) {
+        topMsgPill.classList.remove('hidden');
+      } else {
+        topMsgPill.classList.add('hidden');
+      }
+    } catch (e) {
+      console.error('Error checking top message state:', e);
+    }
   }
 
   async function loadPresets() {
@@ -80,7 +123,8 @@ window.GraphicsModule = (function() {
             subtitle: p.subtitle,
             duration: p.duration,
             style: p.style,
-            position: selectLtPosition.value
+            position: selectLtPosition.value,
+            color: inputLtColor.value || '#eab308'
           });
         });
         presetContainer.appendChild(btn);

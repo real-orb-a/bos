@@ -57,14 +57,7 @@ bos/
 │   │   ├── events.js          # Chronological broadcast event logger
 │   │   └── goalWorkflow.js    # 10-step automated goal sequence manager
 │   ├── replay/
-│   │   ├── engine.js          # Replay coordinator & OBS media playback
-│   │   ├── buffer.js          # 180s rolling buffer calculation & management
-│   │   ├── recorder.js        # Continuous video capture using FFmpeg (synthetic mode)
-│   │   ├── cameras.js         # Multi-camera capture — one rolling buffer per camera view
-│   │   ├── obsCapture.js      # Direct clip capture via OBS Replay Buffer over WebSocket
-│   │   ├── clips.js           # Clip extraction, OBS-file adoption & trim pass
-│   │   ├── sequence.js        # Clip sequence cycler (playlist) & cycle playback
-│   │   └── slowmotion.js      # FFmpeg setpts & atempo slow-motion processing (1×, ½×, ¼×)
+│   │   └── engine.js          # Source Record trigger — fires "Save Replay Buffer" hotkey
 │   ├── graphics/
 │   │   ├── engine.js          # Embedded HTTP (8088) & WebSocket server for OBS Browser Sources
 │   │   ├── score.js           # Score bug data formatter & animation triggers
@@ -92,11 +85,7 @@ bos/
 │   └── transitions/           # Custom graphical stinger wipe (http://localhost:8088/graphics/transitions/)
 ├── packages/                  # Pluggable Broadcast Animation Packages
 │   └── ssl_media_2026/        # Example custom broadcast design package
-└── replay_cache/              # Replay video segments and rendered clips
-    ├── segments/              # FFmpeg rolling-buffer segments (synthetic mode)
-    ├── obs/                   # OBS Replay Buffer save directory (clip auto-save path)
-    ├── cameras/               # Per-camera rolling buffers & work files (cameras/<id>/)
-    └── clips/                 # BOS clip library (replay-XXX adopted clips + index.json)
+└── replay_cache/              # (reserved — Source Record owns replay file storage)
 ```
 
 ---
@@ -116,7 +105,8 @@ npm run dev
 1. Open **OBS Studio** (v28 or newer).
 2. Go to **Tools** → **WebSocket Server Settings**.
 3. Enable WebSocket server on port `4455` (default).
-4. BOS will automatically connect. If OBS is not running, BOS automatically runs in **Simulator Mode** so you can test and operate all features without interruption.
+4. BOS connects automatically and always talks to the **real OBS** — there is no simulator.
+   If OBS isn't running you'll see `OBS ● DISCONNECTED` and BOS keeps retrying.
 
 ### 3. Add Browser Sources to OBS
 Add Browser Sources in OBS pointing to the BOS graphics server (`http://localhost:8088/`):
@@ -128,74 +118,46 @@ Add Browser Sources in OBS pointing to the BOS graphics server (`http://localhos
 
 ---
 
-## Replay Capture
+## Replay Capture (Source Record)
 
-BOS has two capture sources (set in Settings → **OBS WebSocket** tab, or
-`config/bos.json → replay.captureSource`):
+BOS **no longer records, generates or plays replays itself**. Replay capture is owned
+entirely by the **Source Record** OBS plugin — BOS's Replay button simply asks OBS to
+trigger Source Record's "Save Replay Buffer" hotkey over the WebSocket
+(`TriggerHotkeyByName`). Airing/playing the saved file is a future phase.
 
-| Mode | How clips are captured | When to use |
-| :--- | :--- | :--- |
-| **`obs`** (default) | BOS talks to **OBS's own Replay Buffer** over the WebSocket (`StartReplayBuffer` → `SaveReplayBuffer`). OBS continuously buffers the real program output, and on a goal / manual replay BOS saves the buffer **automatically to the set path** `replay.obsReplayBuffer.savePath` (default `replay_cache/obs/`), trims it to your pre/post-roll window (`trimToWindow`), and adopts it into the clip library as `replay-001-…`. | Live broadcast — clips contain the real broadcast footage. |
-| **`synthetic`** | BOS runs an FFmpeg rolling recorder (test pattern) and generates clips with FFmpeg. | Rehearsal / development / no OBS / replay buffer disabled. |
-
-BOS finds the clip OBS saved three ways (in order): the `ReplayBufferSaved` event
-(`savedReplayPath`), the `GetLastReplayBufferReplay` request, and a watch on the save
-directory. If **any** step fails (or OBS is in Simulator mode), BOS automatically falls back
-to synthetic clip generation so a replay is never lost.
-
-### Multi-camera capture (per-camera-view clips)
-
-BOS can capture from **every video source you add**, saving a separate clip **per camera
-view** — so a goal produces a Main/Program clip *and* an independent clip from each camera.
-
-Configure sources in `config/bos.json → replay.captureSources` (or add them after
-enabling cameras):
-
-```json
-"captureSources": [
-  { "id": "main", "name": "Main Program", "type": "obs", "enabled": true },
-  { "id": "cam1", "name": "Camera 1", "type": "ffmpeg", "input": "synthetic", "enabled": true }
-]
+```text
+BOS Replay button → OBS WebSocket TriggerHotkeyByName → Source Record filter → replay file
 ```
 
-- **type `obs`** — the main program feed (OBS Replay Buffer, see above).
-- **type `ffmpeg`** — BOS runs that camera's own independent **FFmpeg rolling buffer**.
-  `input` is an FFmpeg input value: `"synthetic"` (labelled test pattern for rehearsal),
-  a device (`v4l2:/dev/video0`, `dshow://…`, `av://…`) or a URL (`rtsp://…`, `http://…`).
-  Live sources pace themselves, so the buffer truly rolls the last N seconds.
+- **Replay panel** → **SAVE REPLAY** (or `R`) fires the hotkey. A request-state readout shows
+  `IDLE → TRIGGERING → TRIGGERED | ERROR` (the state of the *request*, not the video).
+- **Per-source hotkeys** — each entry in `replay.captureSources` may define its own
+  `hotkeyName` / `contextName`, so every camera/source can save through the correct
+  Source Record filter:
 
-At capture time BOS saves a clip **from every enabled source** into the shared library with
-📷 camera tags (e.g. `replay-004-cam1-goal.mp4`), and each clip records its **real
-duration + camera + team/title** in `replay_cache/clips/index.json`. Clips are trimmed to the
-pre/post-roll window like the main feed. Deleted camera output lands in `replay_cache/cameras/<id>/`.
+```json
+{
+  "enabled": true,
+  "hotkeyName": "ReplayBuffer.Save",
+  "contextName": "Game Capture - Source Record",
+  "captureSources": [
+    { "id": "main", "name": "Main Program", "enabled": true, "hotkeyName": "ReplayBuffer.Save", "contextName": "" },
+    { "id": "cam1", "name": "Camera 1",     "enabled": true, "hotkeyName": "ReplayBuffer.Save", "contextName": "" }
+  ]
+}
+```
 
-**To use OBS capture:**
-1. In OBS Studio enable the Replay Buffer output — **Settings → Output → Replay Buffer →
-   Enable Replay Buffer** (or Advanced Output → Replay Buffer → enable).
-2. BOS will find the output, point its save path at `replay.obsReplayBuffer.savePath` and
-   set the buffer length (best-effort — the saved-file path is still detected if OBS
-   rejects the setting), then start it automatically.
-3. The Replay panel shows a live **OBS REPLAY BUFFER: ● ACTIVE** strip.
+The exact hotkey/context names depend on the Source Record filters in your OBS scene
+collection — set them in **Settings → OBS WebSocket → Source Record Replay Capture** (or
+directly in `config/bos.json`). Goal workflow: **Settings → Goal Automation → "Trigger
+Source Record replay save on goal"**.
 
----
+## House Colours
 
-## Clip Sequence (cycle through clips)
-
-BOS keeps an ordered **on-air clip sequence** — a playlist built from the saved clips in
-the library, so you can cycle through several replays without hunting for files.
-
-- **Build it:** click **SEQ ＋** on any clip in the Replay panel's clip library, or use the
-  **Settings → Clip Sequence** tab to add clips, **↑/↓ to reorder/switch the order**, set a
-  **speed per clip** (1× / ½× / ¼× slow-mo), remove clips, and clear the whole sequence.
-  Camera-view clips show a 📷 tag so you can see which source each clip came from.
-- **Play it:** the Replay panel's **CLIP SEQUENCE CYCLER** strip has **⏮ PREV / PLAY NEXT ▶**
-  (hotkeys `[` and `]`), a **position readout** (`3 / 7`), and clickable clip chips. The
-  cursor **wraps around** the end (LOOP toggle) so you keep cycling forever.
-- **AUTO-NEXT** chains clips automatically: when a sequence clip finishes naturally, the
-  next clip plays immediately. It never fires on manual STOP or the emergency return-to-live.
-- The order, per-clip speed, loop and auto-advance flags persist in
-  `config/bos.json` (`replay.sequence`, `replay.sequenceLoop`, `replay.sequenceAutoAdvance`),
-  so the sequence survives restarts.
+Three houses drive the broadcast palette: **Garnet (Red)**, **Emerald (Green)** and
+**Topaz (Yellow)**. The home/away team colours are set from these houses in **Settings →
+Teams & Branding → HOUSE PALETTES** (one-tap swatches), and every dynamic graphic — score
+bug, goal celebration, lower-third accent, custom transition — uses the team's colour.
 
 ---
 
@@ -203,15 +165,13 @@ the library, so you can cycle through several replays without hunting for files.
 
 | Action | Key | Description |
 | :--- | :--- | :--- |
-| **Garnet Goal** | `G` | Trigger 10-step automated Garnet goal sequence |
-| **Topaz Goal** | `T` | Trigger 10-step automated Topaz goal sequence |
-| **Create Replay** | `R` | Capture rolling buffer highlight and play to air |
-| **Emergency Abort** | `L` | Instantly abort replays/graphics and Return to LIVE |
+| **Garnet Goal** | `G` | Trigger automated Garnet goal sequence |
+| **Topaz Goal** | `T` | Trigger automated Topaz goal sequence |
+| **Save Replay** | `R` | Trigger Source Record "Save Replay Buffer" hotkey |
+| **Emergency Abort** | `L` | Abort the goal sequence and Return to LIVE |
 | **Under Review** | `U` | Show official "UNDER REVIEW" lower-third |
 | **Hide Lower Third** | `H` | Clear active lower-third from air |
 | **Match Clock** | `Space` | Start / Pause official match clock |
-| **Previous Clip** | `[` | Play previous clip in the sequence |
-| **Next Clip** | `]` | Play next clip in the sequence |
 
 ---
 
@@ -219,13 +179,11 @@ the library, so you can cycle through several replays without hunting for files.
 
 When the operator presses **GARNET GOAL** or **TOPAZ GOAL**:
 1. **Record Event**: Records event in official match history log.
-2. **Update Score**: Score increments (+1).
-3. **Update Graphic**: Broadcasts animated score update to OBS score bug.
-4. **Replay Capture**: Begins extracting replay clip concurrently in the background.
-5. **Goal Animation**: Full-screen celebration graphic with Web Audio horn.
-6. **Celebration**: Configured duration (default 3s).
-7. **Replay 1×**: Transitions to Replay scene and plays highlight at normal speed.
-8. **Replay ½×**: Plays slow-motion angle with speed watermark.
-9. **Return to Live**: Transitions back to LIVE scene.
+2. **Update Score**: Score increments (+1) and the score graphic animates with the team colour.
+3. **Goal Animation**: Full-screen celebration graphic (Garnet / Emerald / Topaz colour).
+4. **Replay Trigger**: BOS triggers the Source Record "Save Replay Buffer" hotkey
+   (`captureReplayOnGoal`); Source Record writes the file — BOS does no video work.
+5. **Celebration**: Configured duration (default 3s).
+6. **Return to Live**: Returns the program to the LIVE scene.
 
 *At any point, the operator can click **RETURN TO LIVE** (`L`) or **SKIP SEQUENCE** to safely override and restore live broadcast output.*

@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (status.connected) {
       obsStatusIndicator.className = 'obs-status-indicator connected';
-      obsLabel.textContent = status.isMock ? 'OBS ● SIMULATOR (READY)' : 'OBS ● CONNECTED';
+      obsLabel.textContent = 'OBS ● CONNECTED';
       if (status.currentScene) {
         currentSceneName.textContent = status.currentScene;
       }

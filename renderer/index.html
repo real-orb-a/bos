@@ -40,6 +40,8 @@
         </button>
         <div class="master-clock-display" id="master-clock-display">00:00</div>
         <div class="master-period-display" id="master-period-display">1ST HALF</div>
+        <!-- Additional-time overlay: appears below the clock once the set time is done -->
+        <div class="master-stoppage-display hidden" id="master-stoppage-display">+1:00</div>
         <button class="clock-action-btn secondary" id="btn-clock-reset" title="Reset Clock">
           <svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         </button>
@@ -101,7 +103,7 @@
           </select>
         </div>
 
-        <!-- Period Selector & Stoppage Time -->
+        <!-- Period Selector & Set Time (regulation length) -->
         <div class="form-row">
           <div class="form-group flex-1">
             <label>PERIOD</label>
@@ -113,13 +115,30 @@
             </select>
           </div>
           <div class="form-group flex-1">
-            <label>STOPPAGE</label>
-            <div class="stoppage-buttons">
-              <button class="stoppage-btn" data-min="0">0</button>
-              <button class="stoppage-btn" data-min="2">+2</button>
-              <button class="stoppage-btn" data-min="3">+3</button>
-              <button class="stoppage-btn" data-min="5">+5</button>
-            </div>
+            <label>SET TIME (MIN)</label>
+            <input type="number" id="input-regulation-min" class="styled-input" value="90" min="1" max="240">
+          </div>
+        </div>
+
+        <!-- Timer Mode: count up (football) or count down (basketball) -->
+        <div class="form-group">
+          <label>TIMER MODE</label>
+          <select id="select-timer-mode" class="styled-select">
+            <option value="stopwatch" selected>STOPWATCH — COUNT UP (FOOTBALL)</option>
+            <option value="countdown">COUNTDOWN — COUNT DOWN (BASKETBALL)</option>
+          </select>
+        </div>
+
+        <!-- Additional time: counted in a +N overlay below the clock after the set time -->
+        <div class="form-group">
+          <label>ADDITIONAL TIME (AFTER SET TIME)</label>
+          <div class="stoppage-buttons">
+            <button class="stoppage-btn" data-min="0">0</button>
+            <button class="stoppage-btn" data-min="1">+1</button>
+            <button class="stoppage-btn" data-min="2">+2</button>
+            <button class="stoppage-btn" data-min="3">+3</button>
+            <button class="stoppage-btn" data-min="4">+4</button>
+            <button class="stoppage-btn" data-min="5">+5</button>
           </div>
         </div>
 
@@ -175,11 +194,11 @@
     <section class="workspace-col col-graphics">
       <div class="card-panel">
         <div class="panel-header">
-          <h2>BROADCAST MESSAGE / LOWER-THIRD</h2>
+          <h2>BROADCAST MESSAGE</h2>
           <span class="panel-badge">ON AIR GRAPHIC</span>
         </div>
 
-        <!-- Active Graphic Countdown -->
+        <!-- Active Graphic Countdown (lower-third zone) -->
         <div class="active-graphic-status" id="active-graphic-card">
           <span class="status-indicator-dot" id="lt-status-dot"></span>
           <div class="status-meta">
@@ -189,29 +208,45 @@
           <button class="btn-hide-active" id="btn-hide-lowerthird" title="Hotkey: H">HIDE</button>
         </div>
 
+        <div class="top-msg-pill hidden" id="top-msg-pill">▼ TOP MESSAGE ON AIR <button class="text-btn" id="btn-hide-top-message">HIDE</button></div>
+
         <!-- Custom Message Inputs -->
         <div class="form-group">
           <label>TITLE</label>
           <input type="text" id="input-lt-title" class="styled-input" placeholder="e.g. UNDER REVIEW" value="UNDER REVIEW">
         </div>
 
-        <div class="form-group">
-          <label>SUBTITLE</label>
-          <input type="text" id="input-lt-subtitle" class="styled-input" placeholder="e.g. DECISION PENDING" value="DECISION PENDING">
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>SUBTITLE</label>
+            <input type="text" id="input-lt-subtitle" class="styled-input" placeholder="e.g. DECISION PENDING" value="DECISION PENDING">
+          </div>
+          <div class="form-group flex-1">
+            <label>HIGHLIGHT (OPTIONAL)</label>
+            <input type="text" id="input-lt-value" class="styled-input" placeholder="e.g. +2ND, LIVE" value="">
+          </div>
         </div>
 
         <div class="form-row">
           <div class="form-group flex-1">
+            <label>ZONE</label>
+            <select id="select-message-zone" class="styled-select">
+              <option value="bottom" selected>Lower-Third (bottom)</option>
+              <option value="top">Top Message (above)</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
             <label>DURATION (SEC)</label>
             <input type="number" id="input-lt-duration" class="styled-input" value="5" min="1" max="60">
           </div>
+        </div>
+        <div class="form-row">
           <div class="form-group flex-1">
             <label>POSITION</label>
             <select id="select-lt-position" class="styled-select">
-              <option value="bottom-left" selected>Bottom Left</option>
-              <option value="bottom-center">Bottom Center</option>
-              <option value="bottom-right">Bottom Right</option>
-              <option value="top-center">Top Center</option>
+              <option value="bottom-left" selected>Left</option>
+              <option value="bottom-center">Center</option>
+              <option value="bottom-right">Right</option>
             </select>
           </div>
           <div class="form-group flex-1">
@@ -221,6 +256,10 @@
               <option value="standard">Standard</option>
               <option value="f1-banner">F1 Banner</option>
             </select>
+          </div>
+          <div class="form-group flex-1">
+            <label>ACCENT COLOUR</label>
+            <input type="color" id="input-lt-color" class="styled-color" value="#eab308" title="House colour (Garnet red / Emerald green / Topaz yellow)">
           </div>
         </div>
 
@@ -421,8 +460,23 @@
             </div>
             <div class="form-group flex-1">
               <label>COLOR</label>
-              <input type="color" id="cfg-team-away-color" class="styled-color" value="#0284c7">
+              <input type="color" id="cfg-team-away-color" class="styled-color" value="#eab308">
             </div>
+          </div>
+
+          <h3 style="margin-top: 16px;">HOUSE PALETTES</h3>
+          <label class="section-label" style="font-size:10px;color:var(--text-dim);">Garnet · Red &nbsp;|&nbsp; Emerald · Green &nbsp;|&nbsp; Topaz · Yellow — tap a swatch to colour that team.</label>
+          <div class="house-preset-row">
+            <span class="house-preset-label">HOME</span>
+            <button class="house-swatch" data-side="home" data-house="garnet" style="background:#e11d48" title="GARNET (Red)"></button>
+            <button class="house-swatch" data-side="home" data-house="emerald" style="background:#10b981" title="EMERALD (Green)"></button>
+            <button class="house-swatch" data-side="home" data-house="topaz" style="background:#eab308" title="TOPAZ (Yellow)"></button>
+          </div>
+          <div class="house-preset-row">
+            <span class="house-preset-label">AWAY</span>
+            <button class="house-swatch" data-side="away" data-house="garnet" style="background:#e11d48" title="GARNET (Red)"></button>
+            <button class="house-swatch" data-side="away" data-house="emerald" style="background:#10b981" title="EMERALD (Green)"></button>
+            <button class="house-swatch" data-side="away" data-house="topaz" style="background:#eab308" title="TOPAZ (Yellow)"></button>
           </div>
         </div>
 

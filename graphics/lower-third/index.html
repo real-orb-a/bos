@@ -6,16 +6,20 @@
   <link rel="stylesheet" href="lower-third.css">
 </head>
 <body>
+  <!-- F1 broadcast-style lower third: skewed dark banner, accent title,
+       small caps subtitle and a right-hand highlight block (label + value). -->
   <div id="lower-third" class="lower-third hidden bottom-left">
-    <div class="accent-bar" id="accent-bar"></div>
-    <div class="content-wrapper">
-      <div class="status-badge" id="status-badge">
-        <span class="pulse-dot"></span>
-        <span class="badge-text" id="badge-text">STATUS</span>
-      </div>
-      <div class="text-block">
-        <h2 class="title" id="lt-title">UNDER REVIEW</h2>
-        <p class="subtitle" id="lt-subtitle">DECISION PENDING</p>
+    <div class="lt-banner">
+      <div class="lt-accent" id="lt-accent"></div>
+      <div class="lt-content">
+        <div class="lt-text">
+          <h2 class="lt-title" id="lt-title">UNDER REVIEW</h2>
+          <p class="lt-subtitle" id="lt-subtitle">DECISION PENDING</p>
+        </div>
+        <div class="lt-side">
+          <span class="lt-side-label" id="badge-text">BROADCAST</span>
+          <span class="lt-side-value" id="lt-value"></span>
+        </div>
       </div>
     </div>
   </div>

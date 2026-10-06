@@ -11,17 +11,22 @@
       "name": "GARNET",
       "short": "GAR",
       "color": "#e11d48",
-      "secondaryColor": "#881337",
+      "secondaryColor": "#7f1d1d",
       "score": 1,
       "logo": ""
     },
     "away": {
       "name": "TOPAZ",
       "short": "TOP",
-      "color": "#0284c7",
-      "secondaryColor": "#0c4a6e",
+      "color": "#eab308",
+      "secondaryColor": "#713f12",
       "score": 1,
       "logo": ""
+    },
+    "houses": {
+      "garnet": { "name": "GARNET", "short": "GAR", "color": "#e11d48", "secondaryColor": "#7f1d1d" },
+      "emerald": { "name": "EMERALD", "short": "EME", "color": "#10b981", "secondaryColor": "#064e3b" },
+      "topaz": { "name": "TOPAZ", "short": "TOP", "color": "#eab308", "secondaryColor": "#713f12" }
     }
   },
   "scenes": {
@@ -62,7 +67,8 @@
     "httpPort": 8088,
     "wsPort": 8088,
     "defaultLowerThirdDuration": 5,
-    "animationStyle": "slide-in"
+    "animationStyle": "slide-in",
+    "lowerThirdColor": "#eab308"
   },
   "transitions": {
     "defaultTransition": "Fade",

@@ -9,15 +9,15 @@ class ScoreManager extends EventEmitter {
       name: teams.home?.name || 'GARNET',
       short: teams.home?.short || 'GAR',
       color: teams.home?.color || '#e11d48',
-      secondaryColor: teams.home?.secondaryColor || '#881337',
+      secondaryColor: teams.home?.secondaryColor || '#7f1d1d',
       score: teams.home?.score || 0,
       logo: teams.home?.logo || ''
     };
     this.away = {
       name: teams.away?.name || 'TOPAZ',
       short: teams.away?.short || 'TOP',
-      color: teams.away?.color || '#0284c7',
-      secondaryColor: teams.away?.secondaryColor || '#0c4a6e',
+      color: teams.away?.color || '#eab308',
+      secondaryColor: teams.away?.secondaryColor || '#713f12',
       score: teams.away?.score || 0,
       logo: teams.away?.logo || ''
     };

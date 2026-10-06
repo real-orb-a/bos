@@ -3,28 +3,28 @@
   const titleEl = document.getElementById('lt-title');
   const subtitleEl = document.getElementById('lt-subtitle');
   const badgeText = document.getElementById('badge-text');
+  const valueEl = document.getElementById('lt-value');
 
   function showLowerThird(data) {
     if (!data) return;
 
     titleEl.textContent = data.title || 'BROADCAST MESSAGE';
     subtitleEl.textContent = data.subtitle || '';
-    if (!data.subtitle) {
-      subtitleEl.style.display = 'none';
-    } else {
-      subtitleEl.style.display = 'block';
-    }
+    subtitleEl.style.display = data.subtitle ? 'block' : 'none';
 
+    // Right-hand highlight block: small label (badge) + big accent value.
     badgeText.textContent = data.style === 'alert' ? 'OFFICIAL NOTICE' : (data.badge || 'BROADCAST');
+    valueEl.textContent = data.value || '';
+
+    // House colour accent (Garnet / Emerald / Topaz, or a custom broadcast colour)
+    // drives the accent stripe, the title and the highlight value.
+    const accent = data.color || '';
+    if (accent) document.documentElement.style.setProperty('--lt-accent', accent);
 
     // Reset positions and styles
     lt.className = 'lower-third';
-    const pos = data.position || 'bottom-left';
-    lt.classList.add(pos);
-
-    if (data.style) {
-      lt.classList.add(`style-${data.style}`);
-    }
+    lt.classList.add(data.position || 'bottom-left');
+    if (data.style) lt.classList.add(`style-${data.style}`);
 
     // Force reflow and remove hidden
     void lt.offsetWidth;

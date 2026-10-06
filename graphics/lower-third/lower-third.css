@@ -15,154 +15,130 @@ body {
   user-select: none;
 }
 
+/*
+ * F1 broadcast lower-third (styled after the reference race broadcast banner):
+ * a skewed dark banner with an accent stripe on the left, a bold accent-coloured
+ * title, a small caps subtitle underneath, and a right-hand highlight block
+ * (small white label + big accent value — the "UP TO / 2ND" slot in the reference).
+ */
 .lower-third {
   position: absolute;
-  display: flex;
-  align-items: stretch;
-  background: rgba(13, 17, 30, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0,0,0,0.5);
-  backdrop-filter: blur(16px);
-  overflow: hidden;
-  max-width: 680px;
-  min-width: 360px;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.55));
 }
 
 /* Positions */
-.lower-third.bottom-left {
-  bottom: 60px;
-  left: 60px;
-}
+.lower-third.bottom-left   { bottom: 56px; left: 56px; }
+.lower-third.bottom-center { bottom: 56px; left: 50%; transform: translateX(-50%); }
+.lower-third.bottom-right  { bottom: 56px; right: 56px; }
+.lower-third.top-center    { top: 56px; left: 50%; transform: translateX(-50%); }
 
-.lower-third.bottom-center {
-  bottom: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.lower-third.bottom-right {
-  bottom: 60px;
-  right: 60px;
-}
-
-.lower-third.top-center {
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-/* Animations */
+/* Hidden state — drops down out of view */
 .lower-third.hidden {
   opacity: 0;
-  transform: translateY(30px) scale(0.95);
+  transform: translateY(40px);
   pointer-events: none;
 }
 .lower-third.bottom-center.hidden,
 .lower-third.top-center.hidden {
-  transform: translate(-50%, 30px) scale(0.95);
+  transform: translate(-50%, 40px);
 }
 
-.accent-bar {
-  width: 8px;
-  background: #38bdf8;
+/* Skewed banner */
+.lt-banner {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 420px;
+  transform: skewX(-12deg);
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 16px),
+    linear-gradient(180deg, rgba(15, 19, 32, 0.96) 0%, rgba(8, 11, 20, 0.97) 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+/* Accent stripe — slanted with the banner, driven by the house colour */
+.lt-accent {
+  width: 7px;
+  background: var(--lt-accent, #38bdf8);
   transition: background-color 0.3s;
 }
 
-.content-wrapper {
-  padding: 14px 22px;
+/* Content is counter-skewed so the text stays upright */
+.lt-content {
+  transform: skewX(12deg);
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 12px 30px 12px 32px;
+}
+
+.lt-text {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  margin-bottom: 2px;
+.lt-title {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 27px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--lt-accent, #38bdf8);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
 }
 
-.pulse-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 8px #38bdf8;
-  animation: pulse 1.2s infinite;
+.lt-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
 }
 
-@keyframes pulse {
-  0% { transform: scale(0.85); opacity: 0.6; }
-  50% { transform: scale(1.3); opacity: 1; }
-  100% { transform: scale(0.85); opacity: 0.6; }
+/* Right-hand highlight block ("UP TO / 2ND" in the reference) */
+.lt-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding-left: 24px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.badge-text {
+.lt-side-label {
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 2.5px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
 }
 
-.title {
+.lt-side-value {
   font-family: 'Chakra Petch', sans-serif;
-  font-size: 24px;
+  font-size: 27px;
   font-weight: 800;
-  letter-spacing: 1.5px;
-  color: #ffffff;
-  text-transform: uppercase;
-  line-height: 1.1;
+  line-height: 1;
+  color: var(--lt-accent, #38bdf8);
+  white-space: nowrap;
 }
 
-.subtitle {
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
+.lt-side-value:empty {
+  display: none;
 }
 
-/* Alert / Warning Review Style */
-.lower-third.style-alert {
-  border-color: rgba(245, 158, 11, 0.5);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(245, 158, 11, 0.25);
+/* Style accents (glow colour differs per style; layout is shared) */
+.lower-third.style-alert .lt-banner {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 158, 11, 0.28);
 }
-.lower-third.style-alert .accent-bar {
-  background: #f59e0b;
-}
-.lower-third.style-alert .pulse-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 10px #f59e0b;
-}
-.lower-third.style-alert .status-badge {
-  background: rgba(245, 158, 11, 0.2);
-}
-.lower-third.style-alert .badge-text {
-  color: #fbbf24;
-}
-
-/* F1 Style Banner */
-.lower-third.style-f1-banner {
-  border-color: rgba(34, 197, 94, 0.5);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.8), 0 0 25px rgba(34, 197, 94, 0.3);
-}
-.lower-third.style-f1-banner .accent-bar {
-  background: #22c55e;
-}
-.lower-third.style-f1-banner .pulse-dot {
-  background: #22c55e;
-  box-shadow: 0 0 10px #22c55e;
-}
-.lower-third.style-f1-banner .status-badge {
-  background: rgba(34, 197, 94, 0.2);
-}
-.lower-third.style-f1-banner .badge-text {
-  color: #4ade80;
+.lower-third.style-f1-banner .lt-banner {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.7), 0 0 24px rgba(34, 197, 94, 0.28);
 }

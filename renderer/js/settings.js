@@ -66,6 +66,27 @@ window.SettingsModule = (function() {
     btnSave.addEventListener('click', () => {
       saveFormData();
     });
+
+    // House palette swatches (Garnet red / Emerald green / Topaz yellow)
+    document.querySelectorAll('.house-swatch').forEach((sw) => {
+      sw.addEventListener('click', async () => {
+        try {
+          const houses = await window.bosAPI.config.get('teams.houses');
+          if (!houses) return;
+          const house = houses[sw.dataset.house];
+          if (!house) return;
+          const side = sw.dataset.side;
+          const colorInput = side === 'home' ? cfgTeamHomeColor : cfgTeamAwayColor;
+          const nameInput = side === 'home' ? cfgTeamHomeName : cfgTeamAwayName;
+          const shortInput = side === 'home' ? cfgTeamHomeShort : cfgTeamAwayShort;
+          if (house.color) colorInput.value = house.color;
+          if (house.name) nameInput.value = house.name;
+          if (house.short) shortInput.value = house.short;
+        } catch (e) {
+          console.error('House preset error:', e);
+        }
+      });
+    });
   }
 
   async function loadFormData() {

@@ -9,6 +9,12 @@
     const title = data.title || 'REPLAY';
     badgeTitle.textContent = title;
 
+    // House colours (Garnet / Emerald / Topaz …) or a custom brand colour.
+    const accent = data.color || '';
+    const accent2 = data.color2 || '';
+    document.documentElement.style.setProperty('--tw-accent', accent);
+    document.documentElement.style.setProperty('--tw-accent2', accent2 || accent);
+
     container.className = 'transition-container hidden';
     void container.offsetWidth; // force reflow
     container.className = 'transition-container playing';

@@ -20,6 +20,9 @@ window.MatchModule = (function() {
   const btnClockReset = document.getElementById('btn-clock-reset');
   const masterClockDisplay = document.getElementById('master-clock-display');
   const masterPeriodDisplay = document.getElementById('master-period-display');
+  const masterStoppageDisplay = document.getElementById('master-stoppage-display');
+  const selectTimerMode = document.getElementById('select-timer-mode');
+  const inputRegulationMin = document.getElementById('input-regulation-min');
 
   const eventFeedList = document.getElementById('event-feed-list');
   const btnClearEvents = document.getElementById('btn-clear-events');
@@ -62,7 +65,7 @@ window.MatchModule = (function() {
       window.bosAPI.match.setPeriod(e.target.value);
     });
 
-    // Stoppage buttons
+    // Stoppage / additional time buttons (allotted +N shown & counted after the set time)
     stoppageButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         stoppageButtons.forEach(b => b.classList.remove('active'));
@@ -70,6 +73,18 @@ window.MatchModule = (function() {
         const min = parseInt(btn.dataset.min, 10);
         window.bosAPI.match.setClock({ stoppageMinutes: min });
       });
+    });
+
+    // Timer mode: stopwatch (count up to the set time) or countdown (count down to 00:00)
+    selectTimerMode.addEventListener('change', (e) => {
+      window.bosAPI.match.setTimerMode(e.target.value);
+    });
+
+    // Set time (regulation length in minutes)
+    inputRegulationMin.addEventListener('change', () => {
+      const mins = Math.max(1, parseInt(inputRegulationMin.value, 10) || 90);
+      inputRegulationMin.value = mins;
+      window.bosAPI.match.setClock({ regulationMinutes: mins });
     });
 
     // Clock
@@ -171,6 +186,20 @@ window.MatchModule = (function() {
     masterClockDisplay.textContent = clock.formatted;
     masterPeriodDisplay.textContent = `${clock.period.toUpperCase()} ${clock.stoppageTime}`;
     selectPeriod.value = clock.period;
+
+    // Timer mode + set time (don't clobber the input while the operator is typing)
+    if (clock.mode) selectTimerMode.value = clock.mode;
+    if (clock.regulationSeconds && document.activeElement !== inputRegulationMin) {
+      inputRegulationMin.value = Math.round(clock.regulationSeconds / 60);
+    }
+
+    // Additional-time overlay below the clock ("+1:00" counting up to "+N:00")
+    if (clock.inStoppage && clock.stoppageDisplay) {
+      masterStoppageDisplay.textContent = clock.stoppageDisplay;
+      masterStoppageDisplay.classList.remove('hidden');
+    } else {
+      masterStoppageDisplay.classList.add('hidden');
+    }
 
     // Toggle button icon
     if (clock.running) {

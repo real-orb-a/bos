@@ -23,8 +23,15 @@ class ConfigManager extends EventEmitter {
     this.config = {
       obs: { host: 'localhost', port: 4455, password: '', autoReconnect: true, reconnectIntervalMs: 3000 },
       teams: {
-        home: { name: 'GARNET', short: 'GAR', color: '#e11d48', secondaryColor: '#881337', score: 0 },
-        away: { name: 'TOPAZ', short: 'TOP', color: '#0284c7', secondaryColor: '#0c4a6e', score: 0 }
+        home: { name: 'GARNET', short: 'GAR', color: '#e11d48', secondaryColor: '#7f1d1d', score: 0 },
+        away: { name: 'TOPAZ', short: 'TOP', color: '#eab308', secondaryColor: '#713f12', score: 0 },
+        // The three houses: Garnet (red), Emerald (green), Topaz (yellow).
+        // Teams pick their palette from here; colours drive every broadcast graphic.
+        houses: {
+          garnet: { name: 'GARNET', short: 'GAR', color: '#e11d48', secondaryColor: '#7f1d1d' },
+          emerald: { name: 'EMERALD', short: 'EME', color: '#10b981', secondaryColor: '#064e3b' },
+          topaz: { name: 'TOPAZ', short: 'TOP', color: '#eab308', secondaryColor: '#713f12' }
+        }
       },
       scenes: { liveScene: 'LIVE', replayScene: 'REPLAY', graphicsScene: 'GRAPHICS', replayMediaSource: 'Replay Video' },
       replay: {
@@ -37,8 +44,14 @@ class ConfigManager extends EventEmitter {
           { id: 'cam2', name: 'Camera 2', enabled: false, hotkeyName: 'ReplayBuffer.Save', contextName: '' }
         ]
       },
-      graphics: { httpPort: 8088, wsPort: 8088, defaultLowerThirdDuration: 5, animationStyle: 'slide-in' },
+      graphics: { httpPort: 8088, wsPort: 8088, defaultLowerThirdDuration: 5, animationStyle: 'slide-in', lowerThirdColor: '#eab308' },
       transitions: { defaultTransition: 'Fade', durationMs: 300 },
+      match: {
+        // 'stopwatch' counts up to the set time (football), 'countdown' counts down (basketball).
+        timerMode: 'stopwatch',
+        // The "set time": minutes the clock runs before additional/stoppage time.
+        regulationMinutes: 90
+      },
       hotkeys: { garnetGoal: 'KeyG', topazGoal: 'KeyT', quickReplay: 'KeyR', returnLive: 'KeyL', underReview: 'KeyU', hideLowerThird: 'KeyH', clockToggle: 'Space', sequencePrevious: 'BracketLeft', sequenceNext: 'BracketRight' },
       goalWorkflow: {
         showGoalAnimation: true,

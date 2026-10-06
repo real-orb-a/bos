@@ -27,6 +27,8 @@ class GraphicsEngine extends EventEmitter {
     this.connectedClients = new Set();
     this.replayOverlayActive = false;
     this.replayOverlayData = null;
+    this.topMessageActive = false;
+    this.topMessageData = null;
 
     // Pending score animation requested by a workflow before the score changes,
     // so the scoreChanged listener broadcasts a single clean animation event.
@@ -114,6 +116,7 @@ class GraphicsEngine extends EventEmitter {
               <li><a href="/graphics/score/" target="_blank">Score Bug (/graphics/score/)</a></li>
               <li><a href="/graphics/goal/" target="_blank">Goal Celebration (/graphics/goal/)</a></li>
               <li><a href="/graphics/lower-third/" target="_blank">Lower Third & F1 Review (/graphics/lower-third/)</a></li>
+              <li><a href="/graphics/top-message/" target="_blank">Top Message (/graphics/top-message/)</a></li>
               <li><a href="/graphics/replay/" target="_blank">Replay Overlay (/graphics/replay/)</a></li>
             </ul>
           </body>
@@ -169,6 +172,10 @@ class GraphicsEngine extends EventEmitter {
         type: 'INITIAL_SYNC',
         score: this.scoreGraphics.getPayload(),
         lowerThird: this.lowerThird.getState(),
+        topMessage: {
+          active: this.topMessageActive,
+          data: this.topMessageData
+        },
         replayOverlay: {
           active: this.replayOverlayActive,
           data: this.replayOverlayData
@@ -245,6 +252,35 @@ class GraphicsEngine extends EventEmitter {
 
   hideLowerThird() {
     return this.lowerThird.hide();
+  }
+
+  // ---- Top message (an upper-third mirror of the lower third) ----
+
+  showTopMessage(data = {}) {
+    this.topMessageActive = true;
+    this.topMessageData = {
+      title: data.title || 'BROADCAST MESSAGE',
+      subtitle: data.subtitle || '',
+      badge: data.badge || '',
+      value: data.value || '',
+      duration: data.duration !== undefined ? data.duration : (this.config.get('graphics.defaultLowerThirdDuration') || 5),
+      // Centred at the top by default, like the race-control banner reference.
+      position: data.position || 'top-center',
+      style: data.style || 'standard',
+      color: data.color || this.config.get('graphics.lowerThirdColor') || '',
+      timestamp: Date.now()
+    };
+    this.broadcast({
+      type: 'TOP_MESSAGE_SHOW',
+      data: this.topMessageData
+    });
+    return this.topMessageData;
+  }
+
+  hideTopMessage() {
+    this.topMessageActive = false;
+    this.topMessageData = null;
+    this.broadcast({ type: 'TOP_MESSAGE_HIDE', timestamp: Date.now() });
   }
 
   showReplayOverlay(data) {

@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('bosAPI', {
     clockToggle: () => ipcRenderer.invoke('match:clockToggle'),
     clockReset: () => ipcRenderer.invoke('match:clockReset'),
     setClock: (data) => ipcRenderer.invoke('match:setClock', data),
+    setTimerMode: (mode) => ipcRenderer.invoke('match:setTimerMode', mode),
     setPeriod: (p) => ipcRenderer.invoke('match:setPeriod', p),
     onClockTick: (callback) => {
       const cb = (_, data) => callback(data);
@@ -117,6 +118,9 @@ contextBridge.exposeInMainWorld('bosAPI', {
   graphics: {
     showLowerThird: (data) => ipcRenderer.invoke('graphics:showLowerThird', data),
     hideLowerThird: () => ipcRenderer.invoke('graphics:hideLowerThird'),
+    showTopMessage: (data) => ipcRenderer.invoke('graphics:showTopMessage', data),
+    hideTopMessage: () => ipcRenderer.invoke('graphics:hideTopMessage'),
+    getTopMessage: () => ipcRenderer.invoke('graphics:getTopMessage'),
     getPresets: () => ipcRenderer.invoke('graphics:getPresets'),
     getQueue: () => ipcRenderer.invoke('graphics:getQueue'),
     enqueue: (item) => ipcRenderer.invoke('graphics:enqueue', item),

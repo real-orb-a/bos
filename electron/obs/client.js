@@ -1,6 +1,13 @@
 const { OBSWebSocket } = require('obs-websocket-js');
 const EventEmitter = require('events');
 
+/**
+ * OBSClient
+ * ---------
+ * OBS WebSocket v5 gateway. BOS always talks to the REAL OBS Studio — there is no
+ * simulator/mock fallback. If OBS is unreachable the client reports DISCONNECTED and
+ * keeps retrying; any privileged call simply fails until the connection is restored.
+ */
 class OBSClient extends EventEmitter {
   constructor(configManager) {
     super();
@@ -8,12 +15,11 @@ class OBSClient extends EventEmitter {
     this.obs = new OBSWebSocket();
     this.isConnected = false;
     this.isConnecting = false;
-    this.isMockMode = false;
     this.reconnectTimer = null;
     this.pingInterval = null;
     this.latencyMs = 0;
-    this.currentScene = 'LIVE';
-    this.availableScenes = ['LIVE', 'REPLAY', 'GRAPHICS'];
+    this.currentScene = null;
+    this.availableScenes = [];
     this.streamStatus = { active: false, timecode: '00:00:00' };
     this.recordStatus = { active: false, timecode: '00:00:00' };
 
@@ -60,7 +66,6 @@ class OBSClient extends EventEmitter {
       await this.obs.connect(url, password);
       this.isConnected = true;
       this.isConnecting = false;
-      this.isMockMode = false;
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
@@ -77,33 +82,17 @@ class OBSClient extends EventEmitter {
       }
 
       this._startPing();
-      this.emit('connected', { isMock: false, currentScene: this.currentScene, availableScenes: this.availableScenes });
+      this.emit('connected', { currentScene: this.currentScene, availableScenes: this.availableScenes });
       console.log('[OBSClient] Connected to OBS Studio.');
     } catch (err) {
       this.isConnecting = false;
       this._setDisconnected();
-      console.warn(`[OBSClient] Failed to connect to OBS (${err.message}). Entering Mock/Simulation mode for seamless operation.`);
-      
-      // Auto-fallback to simulator mode so operator can still test, practice and run cues
-      this.enableMockMode();
+      console.warn(`[OBSClient] Failed to connect to OBS (${err.message}). Will keep retrying.`);
 
       if (this.configManager.get('obs.autoReconnect')) {
         this.scheduleReconnect();
       }
     }
-  }
-
-  enableMockMode() {
-    this.isMockMode = true;
-    this.isConnected = true;
-    this.currentScene = this.configManager.get('scenes.liveScene') || 'LIVE';
-    this.availableScenes = [
-      this.configManager.get('scenes.liveScene') || 'LIVE',
-      this.configManager.get('scenes.replayScene') || 'REPLAY',
-      this.configManager.get('scenes.graphicsScene') || 'GRAPHICS'
-    ];
-    this.latencyMs = 1;
-    this.emit('connected', { isMock: true, currentScene: this.currentScene, availableScenes: this.availableScenes });
   }
 
   async disconnect() {
@@ -113,20 +102,18 @@ class OBSClient extends EventEmitter {
     }
     this._stopPing();
 
-    if (this.isConnected && !this.isMockMode) {
+    if (this.isConnected) {
       try {
         await this.obs.disconnect();
       } catch (err) {
         console.error('[OBSClient] Error disconnecting:', err);
       }
     }
-
     this._setDisconnected();
   }
 
   _setDisconnected() {
     this.isConnected = false;
-    this.isMockMode = false;
     this.isConnecting = false;
     this._stopPing();
     this.emit('disconnected');
@@ -137,7 +124,7 @@ class OBSClient extends EventEmitter {
     const interval = this.configManager.get('obs.reconnectIntervalMs') || 3000;
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
-      if (!this.isConnected || this.isMockMode) {
+      if (!this.isConnected) {
         await this.connect();
       }
     }, interval);
@@ -146,7 +133,7 @@ class OBSClient extends EventEmitter {
   _startPing() {
     this._stopPing();
     this.pingInterval = setInterval(async () => {
-      if (this.isConnected && !this.isMockMode) {
+      if (this.isConnected) {
         const start = Date.now();
         try {
           await this.obs.call('GetVersion');
@@ -167,42 +154,16 @@ class OBSClient extends EventEmitter {
   }
 
   async call(requestType, requestData) {
-    if (this.isMockMode) {
-      return this._mockCall(requestType, requestData);
-    }
     if (!this.isConnected) {
       throw new Error('OBS is not connected.');
     }
     return await this.obs.call(requestType, requestData);
   }
 
-  _mockCall(requestType, requestData) {
-    console.log(`[OBS-MOCK] call ${requestType}:`, requestData);
-    if (requestType === 'GetCurrentProgramScene') {
-      return { currentProgramSceneName: this.currentScene };
-    }
-    if (requestType === 'SetCurrentProgramScene') {
-      this.currentScene = requestData.sceneName;
-      this.emit('sceneChanged', this.currentScene);
-      return {};
-    }
-    if (requestType === 'GetSceneList') {
-      return { currentProgramSceneName: this.currentScene, scenes: this.availableScenes.map(s => ({ sceneName: s })) };
-    }
-    if (requestType === 'GetRecordStatus') {
-      return { outputActive: this.recordStatus.active, outputTimecode: this.recordStatus.timecode };
-    }
-    if (requestType === 'GetStreamStatus') {
-      return { outputActive: this.streamStatus.active, outputTimecode: this.streamStatus.timecode };
-    }
-    return {};
-  }
-
   getStatus() {
     return {
       connected: this.isConnected,
       connecting: this.isConnecting,
-      isMock: this.isMockMode,
       currentScene: this.currentScene,
       availableScenes: this.availableScenes,
       latencyMs: this.latencyMs,

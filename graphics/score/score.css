@@ -118,6 +118,20 @@ body {
   margin-top: 1px;
 }
 
+/* Additional-time overlay: shown below the clock once the set time is reached */
+.stoppage-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+.stoppage-display.hidden {
+  display: none;
+}
+
 /* Animations for score update */
 .score-pop {
   animation: scorePulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
