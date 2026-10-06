@@ -13,9 +13,8 @@ const EventEmitter = require('events');
  *
  *   BOS ──▶ OBS WebSocket TriggerHotkeyByName ──▶ Source Record filter ──▶ file
  *
- * The hotkey + context names are configuration (`replay.hotkeyName` +
- * `replay.contextName`). Each entry in `replay.captureSources` may define its OWN
- * pair, so every camera/source can save through the correct Source Record filter.
+ * `replay.hotkeyName` and `replay.contextName` are sent as separate fields in
+ * `TriggerHotkeyByName`. Each capture source may override either value.
  *
  * Replay AIRING (selecting the saved file, loading an OBS media source, switching
  * to the REPLAY scene, playing, returning to LIVE) is deliberately NOT implemented
@@ -42,7 +41,7 @@ class ReplayEngine extends EventEmitter {
   get defaultHotkey() {
     return {
       hotkeyName: this.config.get('replay.hotkeyName') || 'ReplayBuffer.Save',
-      contextName: this.config.get('replay.contextName') || ''
+      contextName: this.config.get('replay.contextName') || 'test1 - Source Record'
     };
   }
 
@@ -55,10 +54,12 @@ class ReplayEngine extends EventEmitter {
   resolveHotkey(sourceId = null) {
     const src = sourceId ? this.captureSources.find(s => s.id === sourceId) : null;
     const fallback = this.defaultHotkey;
+    const hotkeyName = (src && src.hotkeyName) || fallback.hotkeyName;
+    const contextName = src && src.contextName ? src.contextName : fallback.contextName;
     return {
       sourceId: src ? src.id : null,
-      hotkeyName: (src && src.hotkeyName) || fallback.hotkeyName,
-      contextName: (src && src.contextName) || fallback.contextName
+      hotkeyName,
+      contextName
     };
   }
 
@@ -99,8 +100,10 @@ class ReplayEngine extends EventEmitter {
     console.log(`[Replay] hotkeyName=${cfg.hotkeyName}`);
     console.log(`[Replay] contextName=${cfg.contextName}`);
 
-    const request = { hotkeyName: cfg.hotkeyName };
-    if (cfg.contextName) request.contextName = cfg.contextName;
+    const request = {
+      hotkeyName: cfg.hotkeyName,
+      contextName: cfg.contextName
+    };
 
     try {
       await this.obs.call('TriggerHotkeyByName', request);
@@ -125,6 +128,28 @@ class ReplayEngine extends EventEmitter {
     }
   }
 
+  async captureAllReplays() {
+    if (this.state === 'TRIGGERING') {
+      return { ok: false, state: this.state, error: 'A replay save is already being triggered.' };
+    }
+
+    const sources = this.captureSources;
+    if (!sources.length) return this.captureReplay();
+
+    const results = [];
+    for (const source of sources) {
+      results.push(await this.captureReplay({ sourceId: source.id }));
+    }
+
+    const failed = results.find(result => !result.ok);
+    return {
+      ok: !failed,
+      state: this.state,
+      results,
+      ...(failed ? { error: failed.error } : {})
+    };
+  }
+
   /**
    * Operation B — Air Replay (FUTURE).
    * Selecting the saved file, loading the OBS replay media source, switching to
@@ -147,11 +172,10 @@ class ReplayEngine extends EventEmitter {
       lastError: this.lastError,
       lastTriggeredAt: this.lastTriggeredAt,
       defaultHotkey: this.defaultHotkey,
-      sources: this.captureSources.map(s => ({
-        id: s.id,
-        name: s.name,
-        hotkeyName: s.hotkeyName || '',
-        contextName: s.contextName || ''
+      sources: this.captureSources.map(source => ({
+        id: source.id,
+        name: source.name,
+        ...this.resolveHotkey(source.id)
       }))
     };
   }

@@ -35,22 +35,27 @@ class MatchEngine extends EventEmitter {
     //   timerMode 'stopwatch' counts UP to the regulation ("set") time — football style.
     //   timerMode 'countdown' counts DOWN to 00:00 — basketball-style timing.
     //   Once the set time is reached, if additional (stoppage) time has been set the
-    //   main clock FREEZES at the set time and a "+M:SS" overlay below it counts the
+    //   main clock FREEZES at the set time and a 00:00 overlay below it counts the
     //   added time until the allotted stoppage is used up, then the clock stops.
     this.clockRunning = false;
     this.elapsedSeconds = 0;
-    this.period = '1st Half';
+    this.period = this.config.get('match.periodLabel') || '1st Half';
     this.stoppageTimeMinutes = 0;    // allotted additional time in minutes (N)
     this.stoppageElapsedSeconds = 0; // additional time consumed so far (seconds)
     this.inStoppage = false;
+    this.awaitingStoppageApproval = false;
+    this.additionalTimeMode = this.config.get('match.additionalTimeMode') === 'approval' ? 'approval' : 'automatic';
     this.timerMode = this.config.get('match.timerMode') === 'countdown' ? 'countdown' : 'stopwatch';
     const regulationMinutes = parseInt(this.config.get('match.regulationMinutes'), 10);
     this.regulationSeconds = (Number.isFinite(regulationMinutes) && regulationMinutes > 0 ? regulationMinutes : 90) * 60;
+    const configuredStartSeconds = parseInt(this.config.get('match.startSeconds'), 10);
+    this.hasConfiguredStartSeconds = Number.isFinite(configuredStartSeconds) && configuredStartSeconds >= 0;
+    this.startSeconds = Number.isFinite(configuredStartSeconds) && configuredStartSeconds >= 0
+      ? Math.min(configuredStartSeconds, this.regulationSeconds)
+      : (this.timerMode === 'countdown' ? this.regulationSeconds : 0);
     this.clockInterval = null;
 
-    if (this.timerMode === 'countdown') {
-      this.elapsedSeconds = this.regulationSeconds;
-    }
+    this.elapsedSeconds = this.startSeconds;
 
     this._startClockTick();
   }
@@ -102,7 +107,11 @@ class MatchEngine extends EventEmitter {
   // The set (regulation) time has been reached with nothing left on the main clock.
   _reachRegulation() {
     if (this.stoppageTimeMinutes > 0) {
-      this._beginStoppage();
+      if (this.additionalTimeMode === 'approval') {
+        this._awaitStoppageApproval();
+      } else {
+        this._beginStoppage();
+      }
     } else {
       this.clockRunning = false;
       this.events.recordEvent('REGULATION_END', { time: this.getClockState().formatted });
@@ -110,23 +119,30 @@ class MatchEngine extends EventEmitter {
     }
   }
 
-  // Additional time begins: main display frozen at the set time, overlay counts +1:00 …
+  // Additional time begins: main display frozen at the set time, overlay counts from 00:00.
   _beginStoppage() {
+    this.awaitingStoppageApproval = false;
     this.inStoppage = true;
     this.stoppageElapsedSeconds = 0;
     this.events.recordEvent('STOPPAGE_START', { allotted: `+${this.stoppageTimeMinutes}` });
     this.emit('clockChanged', this.getClockState());
   }
 
-  // "+M:SS" overlay shown while counting additional time:
-  // starts at +1:00, ticks through +1:59 → +2:00 … up to the allotted "+N:00".
+  _awaitStoppageApproval() {
+    if (this.awaitingStoppageApproval) return;
+    this.clockRunning = false;
+    this.awaitingStoppageApproval = true;
+    this.events.recordEvent('STOPPAGE_AWAITING_APPROVAL', {
+      allotted: `+${this.stoppageTimeMinutes}`
+    });
+    this.emit('clockChanged', this.getClockState());
+  }
+
+  // Elapsed additional time shown below the frozen regulation clock (00:00 → N:00).
   _formatStoppage() {
-    const allotted = this.stoppageTimeMinutes;
-    if (allotted <= 0) return '';
-    if (this.stoppageElapsedSeconds >= allotted * 60) return `+${allotted}:00`;
-    const minute = Math.floor(this.stoppageElapsedSeconds / 60) + 1;
+    const minute = Math.floor(this.stoppageElapsedSeconds / 60);
     const secs = this.stoppageElapsedSeconds % 60;
-    return `+${minute}:${String(secs).padStart(2, '0')}`;
+    return `${String(minute).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 
   getClockState() {
@@ -141,7 +157,9 @@ class MatchEngine extends EventEmitter {
       stoppageTime: this.stoppageTimeMinutes > 0 ? `+${this.stoppageTimeMinutes}` : '',
       mode: this.timerMode,
       regulationSeconds: this.regulationSeconds,
+      additionalTimeMode: this.additionalTimeMode,
       inStoppage: this.inStoppage,
+      awaitingStoppageApproval: this.awaitingStoppageApproval,
       stoppageMinutes: this.stoppageTimeMinutes,
       stoppageElapsedSeconds: this.stoppageElapsedSeconds,
       stoppageDisplay: this.inStoppage ? this._formatStoppage() : ''
@@ -149,9 +167,14 @@ class MatchEngine extends EventEmitter {
   }
 
   startClock() {
+    if (this.awaitingStoppageApproval) return this.getClockState();
+
     if (!this.inStoppage && this._atRegulation()) {
       if (this.stoppageTimeMinutes > 0) {
-        // Additional time was set at/after the set time → begin counting it now.
+        if (this.additionalTimeMode === 'approval') {
+          this._awaitStoppageApproval();
+          return this.getClockState();
+        }
         this._beginStoppage();
       } else {
         // Set time reached with no additional time — nothing left to count.
@@ -180,9 +203,12 @@ class MatchEngine extends EventEmitter {
   }
 
   resetClock() {
+      this.awaitingStoppageApproval = false;
     // Reset goes back to the START of the current mode: 00:00 (stopwatch) or the
     // full set time (countdown). Added time is always cleared with a reset.
-    this.elapsedSeconds = this.timerMode === 'countdown' ? this.regulationSeconds : 0;
+    this.elapsedSeconds = this.hasConfiguredStartSeconds
+      ? this.startSeconds
+      : (this.timerMode === 'countdown' ? this.regulationSeconds : 0);
     this.inStoppage = false;
     this.stoppageElapsedSeconds = 0;
     this.events.recordEvent('CLOCK_RESET');
@@ -194,6 +220,10 @@ class MatchEngine extends EventEmitter {
       const mins = parseInt(regulationMinutes, 10);
       if (Number.isFinite(mins) && mins > 0) {
         this.regulationSeconds = mins * 60;
+        if (this.hasConfiguredStartSeconds && this.startSeconds > this.regulationSeconds) {
+          this.startSeconds = this.regulationSeconds;
+          this.config.set('match.startSeconds', this.startSeconds);
+        }
         if (this.inStoppage) {
           this.elapsedSeconds = this.regulationSeconds; // main clock stays frozen at the set time
         } else if (this.elapsedSeconds > this.regulationSeconds) {
@@ -206,6 +236,7 @@ class MatchEngine extends EventEmitter {
       this.elapsedSeconds = Math.min(parsed, this.regulationSeconds);
       if (this.inStoppage) {
         this.inStoppage = false;
+        this.awaitingStoppageApproval = false;
         this.stoppageElapsedSeconds = 0;
       }
     }
@@ -216,10 +247,63 @@ class MatchEngine extends EventEmitter {
       if (this.inStoppage && mins === 0) {
         // Additional time cancelled mid-count → the overlay disappears and the clock stops.
         this.inStoppage = false;
+        this.awaitingStoppageApproval = false;
         this.stoppageElapsedSeconds = 0;
         this.clockRunning = false;
+      } else if (this.awaitingStoppageApproval && mins === 0) {
+        this.awaitingStoppageApproval = false;
       } else if (!this.inStoppage && mins > 0 && this._atRegulation()) {
-        // Additional time set at/after the set time → the overlay appears and starts counting.
+        if (this.additionalTimeMode === 'approval') {
+          this._awaitStoppageApproval();
+        } else {
+          this._beginStoppage();
+          this.clockRunning = true;
+        }
+      }
+    }
+    this.emit('clockChanged', this.getClockState());
+    return this.getClockState();
+  }
+
+  setStartTime(seconds) {
+    const parsed = Math.max(0, parseInt(seconds, 10) || 0);
+    this.startSeconds = Math.min(parsed, this.regulationSeconds);
+    this.hasConfiguredStartSeconds = true;
+    this.elapsedSeconds = this.startSeconds;
+    if (this.inStoppage) {
+      this.inStoppage = false;
+      this.awaitingStoppageApproval = false;
+      this.stoppageElapsedSeconds = 0;
+    }
+    this.config.set('match.startSeconds', this.startSeconds);
+    this.emit('clockChanged', this.getClockState());
+    return this.getClockState();
+  }
+
+  setTimerMode(mode) {
+      this.awaitingStoppageApproval = false;
+    const nextMode = mode === 'countdown' ? 'countdown' : 'stopwatch';
+    if (nextMode !== this.timerMode) {
+      this.timerMode = nextMode;
+      this.inStoppage = false;
+      this.stoppageElapsedSeconds = 0;
+      this.elapsedSeconds = this.hasConfiguredStartSeconds
+        ? this.startSeconds
+        : (nextMode === 'countdown' ? this.regulationSeconds : 0);
+      this.config.set('match.timerMode', nextMode); // operator-initiated change → persisted
+      this.events.recordEvent('TIMER_MODE_CHANGED', { mode: nextMode });
+    }
+    this.emit('clockChanged', this.getClockState());
+    return this.getClockState();
+  }
+
+  setAdditionalTimeMode(mode) {
+    const nextMode = mode === 'approval' ? 'approval' : 'automatic';
+    if (nextMode !== this.additionalTimeMode) {
+      this.additionalTimeMode = nextMode;
+      this.config.set('match.additionalTimeMode', nextMode);
+      this.events.recordEvent('ADDITIONAL_TIME_MODE_CHANGED', { mode: nextMode });
+      if (nextMode === 'automatic' && this.awaitingStoppageApproval) {
         this._beginStoppage();
         this.clockRunning = true;
       }
@@ -228,16 +312,11 @@ class MatchEngine extends EventEmitter {
     return this.getClockState();
   }
 
-  setTimerMode(mode) {
-    const nextMode = mode === 'countdown' ? 'countdown' : 'stopwatch';
-    if (nextMode !== this.timerMode) {
-      this.timerMode = nextMode;
-      this.inStoppage = false;
-      this.stoppageElapsedSeconds = 0;
-      this.elapsedSeconds = nextMode === 'countdown' ? this.regulationSeconds : 0;
-      this.config.set('match.timerMode', nextMode); // operator-initiated change → persisted
-      this.events.recordEvent('TIMER_MODE_CHANGED', { mode: nextMode });
-    }
+  approveAdditionalTime() {
+    if (!this.awaitingStoppageApproval || this.stoppageTimeMinutes <= 0) return false;
+    this._beginStoppage();
+    this.clockRunning = true;
+    this.events.recordEvent('STOPPAGE_APPROVED', { allotted: `+${this.stoppageTimeMinutes}` });
     this.emit('clockChanged', this.getClockState());
     return this.getClockState();
   }
@@ -246,6 +325,7 @@ class MatchEngine extends EventEmitter {
     // Switching period ONLY changes the label — it never rewrites the clock.
     // The operator owns the time: start/pause/reset, or set it explicitly.
     this.period = period;
+    this.config.set('match.periodLabel', period);
     this.events.recordEvent('PERIOD_CHANGED', { period });
     this.emit('clockChanged', this.getClockState());
   }

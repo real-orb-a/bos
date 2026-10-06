@@ -41,7 +41,7 @@
         <div class="master-clock-display" id="master-clock-display">00:00</div>
         <div class="master-period-display" id="master-period-display">1ST HALF</div>
         <!-- Additional-time overlay: appears below the clock once the set time is done -->
-        <div class="master-stoppage-display hidden" id="master-stoppage-display">+1:00</div>
+        <div class="master-stoppage-display hidden" id="master-stoppage-display">00:00</div>
         <button class="clock-action-btn secondary" id="btn-clock-reset" title="Reset Clock">
           <svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         </button>
@@ -74,7 +74,10 @@
       <span class="sequence-title" id="seq-title">AUTOMATED GOAL SEQUENCE IN PROGRESS</span>
       <span class="sequence-step-pill" id="seq-step-pill">PREPARING REPLAY</span>
     </div>
-    <button class="sequence-abort-btn" id="btn-abort-sequence">SKIP / CANCEL SEQUENCE</button>
+    <div class="sequence-actions">
+      <button class="sequence-go-ahead-btn hidden" id="btn-continue-sequence">GO AHEAD → LIVE</button>
+      <button class="sequence-abort-btn" id="btn-abort-sequence">SKIP / CANCEL SEQUENCE</button>
+    </div>
   </div>
 
   <!-- Main 3-Column Operator Workspace -->
@@ -106,18 +109,18 @@
         <!-- Period Selector & Set Time (regulation length) -->
         <div class="form-row">
           <div class="form-group flex-1">
-            <label>PERIOD</label>
-            <select id="select-period" class="styled-select">
-              <option value="1st Half">1st Half</option>
-              <option value="2nd Half">2nd Half</option>
-              <option value="Extra Time">Extra Time</option>
-              <option value="Penalties">Penalties</option>
-            </select>
+            <label>PERIOD LABEL</label>
+            <input type="text" id="select-period" class="styled-input" value="1st Half" maxlength="24">
           </div>
           <div class="form-group flex-1">
             <label>SET TIME (MIN)</label>
             <input type="number" id="input-regulation-min" class="styled-input" value="90" min="1" max="240">
           </div>
+        </div>
+
+        <div class="form-group">
+          <label>SET CLOCK / START TIME (MM:SS)</label>
+          <input type="text" id="input-start-time" class="styled-input" value="00:00" inputmode="numeric" placeholder="00:00">
         </div>
 
         <!-- Timer Mode: count up (football) or count down (basketball) -->
@@ -129,7 +132,15 @@
           </select>
         </div>
 
-        <!-- Additional time: counted in a +N overlay below the clock after the set time -->
+        <div class="form-group">
+          <label>ADDED TIME START</label>
+          <select id="select-additional-time-mode" class="styled-select">
+            <option value="automatic">AUTOMATIC AT SET TIME</option>
+            <option value="approval">WAIT FOR GO AHEAD</option>
+          </select>
+        </div>
+
+        <!-- Additional time: counted from 00:00 below the clock after the set time -->
         <div class="form-group">
           <label>ADDITIONAL TIME (AFTER SET TIME)</label>
           <div class="stoppage-buttons">
@@ -140,15 +151,25 @@
             <button class="stoppage-btn" data-min="4">+4</button>
             <button class="stoppage-btn" data-min="5">+5</button>
           </div>
+          <button type="button" class="added-time-approval-btn hidden" id="btn-approve-added-time">GO AHEAD</button>
+        </div>
+
+        <div class="scoring-value-control">
+          <label>POINTS PER SCORE</label>
+          <div class="scoring-value-options" role="group" aria-label="Points awarded per score">
+            <button type="button" class="scoring-value-btn active" data-score-points="1" aria-pressed="true">1</button>
+            <button type="button" class="scoring-value-btn" data-score-points="2" aria-pressed="false">2</button>
+            <button type="button" class="scoring-value-btn" data-score-points="3" aria-pressed="false">3</button>
+          </div>
         </div>
 
         <!-- DEDICATED GOAL BUTTONS (Section 9) -->
         <div class="goal-triggers-container">
           <div class="goal-trigger-box home-box">
             <div class="team-label" id="card-home-name">GARNET</div>
-            <button class="master-goal-btn home-goal" id="btn-garnet-goal" title="Hotkey: G">
+            <button class="master-goal-btn home-goal" id="btn-garnet-goal" title="Goal hotkey: G">
               <span class="btn-text">GARNET GOAL</span>
-              <span class="hotkey-pill">G</span>
+              <span class="hotkey-pill" id="home-goal-hotkey" data-code="KeyG">G</span>
             </button>
             <div class="score-adjuster">
               <button class="score-mod-btn" id="btn-sub-home">-</button>
@@ -159,9 +180,9 @@
 
           <div class="goal-trigger-box away-box">
             <div class="team-label" id="card-away-name">TOPAZ</div>
-            <button class="master-goal-btn away-goal" id="btn-topaz-goal" title="Hotkey: T">
+            <button class="master-goal-btn away-goal" id="btn-topaz-goal" title="Goal hotkey: T">
               <span class="btn-text">TOPAZ GOAL</span>
-              <span class="hotkey-pill">T</span>
+              <span class="hotkey-pill" id="away-goal-hotkey" data-code="KeyT">T</span>
             </button>
             <div class="score-adjuster">
               <button class="score-mod-btn" id="btn-sub-away">-</button>
@@ -174,8 +195,8 @@
         <!-- Reset Score / Quick Sync -->
         <div class="card-footer-actions">
           <button class="action-btn-secondary" id="btn-reset-score">RESET SCORE</button>
-          <button class="action-btn-secondary" id="btn-switch-live-scene">SWITCH SCENE: LIVE</button>
         </div>
+        <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-scorebug" type="button" aria-pressed="true">FADE SCORE BUG OUT</button>
       </div>
 
       <!-- Match Events Stream (Section 19) -->
@@ -208,8 +229,6 @@
           <button class="btn-hide-active" id="btn-hide-lowerthird" title="Hotkey: H">HIDE</button>
         </div>
 
-        <div class="top-msg-pill hidden" id="top-msg-pill">▼ TOP MESSAGE ON AIR <button class="text-btn" id="btn-hide-top-message">HIDE</button></div>
-
         <!-- Custom Message Inputs -->
         <div class="form-group">
           <label>TITLE</label>
@@ -227,18 +246,9 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label>ZONE</label>
-            <select id="select-message-zone" class="styled-select">
-              <option value="bottom" selected>Lower-Third (bottom)</option>
-              <option value="top">Top Message (above)</option>
-            </select>
-          </div>
-          <div class="form-group flex-1">
-            <label>DURATION (SEC)</label>
-            <input type="number" id="input-lt-duration" class="styled-input" value="5" min="1" max="60">
-          </div>
+        <div class="form-group">
+          <label>DURATION (SEC)</label>
+          <input type="number" id="input-lt-duration" class="styled-input" value="5" min="1" max="60">
         </div>
         <div class="form-row">
           <div class="form-group flex-1">
@@ -247,14 +257,6 @@
               <option value="bottom-left" selected>Left</option>
               <option value="bottom-center">Center</option>
               <option value="bottom-right">Right</option>
-            </select>
-          </div>
-          <div class="form-group flex-1">
-            <label>STYLE</label>
-            <select id="select-lt-style" class="styled-select">
-              <option value="alert" selected>Alert (Review)</option>
-              <option value="standard">Standard</option>
-              <option value="f1-banner">F1 Banner</option>
             </select>
           </div>
           <div class="form-group flex-1">
@@ -308,7 +310,7 @@
 
         <div class="button-row">
           <button class="primary-action-btn replay-btn" id="btn-save-replay" title="Hotkey: R">
-            <span>● SAVE REPLAY</span>
+            <span>● SAVE ALL REPLAYS</span>
             <span class="hotkey-pill">R</span>
           </button>
         </div>
@@ -317,6 +319,7 @@
         <!-- Per-source quick save (each capture source can define its own hotkey) -->
         <div class="replay-sources-section">
           <label class="section-label">CAPTURE SOURCES</label>
+          <div class="replay-sub-hint">Save one camera here, or use SAVE ALL REPLAYS. Goal capture also triggers every enabled camera unless a single source is selected in Goal Automation.</div>
           <div class="replay-source-buttons" id="replay-source-buttons">
             <div class="empty-queue-hint">Loading sources…</div>
           </div>
@@ -413,21 +416,16 @@
             <input type="checkbox" id="cfg-replay-enabled" checked>
             <label for="cfg-replay-enabled">Enable replay save trigger (Source Record)</label>
           </div>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label>HOTKEY NAME</label>
-              <input type="text" id="cfg-replay-hotkey" class="styled-input" value="ReplayBuffer.Save">
-            </div>
-            <div class="form-group flex-1">
-              <label>CONTEXT NAME</label>
-              <input type="text" id="cfg-replay-context" class="styled-input" value="Game Capture - Source Record">
-            </div>
-          </div>
           <label style="font-size:10px;color:var(--text-dim);">
-            BOS triggers Source Record's Save Replay Buffer hotkey via TriggerHotkeyByName.
-            Set the exact hotkey/context exposed by the Source Record filters in your OBS scene
-            collection (per-source overrides live in config/bos.json → replay.captureSources).
+            Set each camera's OBS hotkey name and context in its row. Existing shared values remain as fallback when camera overrides are blank.
           </label>
+          <div class="replay-source-editor">
+            <div class="replay-source-editor-header">
+              <label class="section-label">CAMERA REPLAY TRIGGERS</label>
+              <button type="button" class="text-btn" id="btn-add-replay-source">+ ADD CAMERA</button>
+            </div>
+            <div id="cfg-replay-sources"></div>
+          </div>
         </div>
 
         <!-- Tab: Teams -->
@@ -447,6 +445,10 @@
               <input type="color" id="cfg-team-home-color" class="styled-color" value="#e11d48">
             </div>
           </div>
+          <div class="form-group">
+            <label>GOAL KEY</label>
+            <input type="text" id="cfg-team-home-hotkey" class="styled-input" value="G" maxlength="16" placeholder="G or F1">
+          </div>
 
           <h3 style="margin-top: 16px;">AWAY TEAM</h3>
           <div class="form-row">
@@ -463,20 +465,24 @@
               <input type="color" id="cfg-team-away-color" class="styled-color" value="#eab308">
             </div>
           </div>
+          <div class="form-group">
+            <label>GOAL KEY</label>
+            <input type="text" id="cfg-team-away-hotkey" class="styled-input" value="T" maxlength="16" placeholder="T or F2">
+          </div>
 
           <h3 style="margin-top: 16px;">HOUSE PALETTES</h3>
           <label class="section-label" style="font-size:10px;color:var(--text-dim);">Garnet · Red &nbsp;|&nbsp; Emerald · Green &nbsp;|&nbsp; Topaz · Yellow — tap a swatch to colour that team.</label>
           <div class="house-preset-row">
             <span class="house-preset-label">HOME</span>
-            <button class="house-swatch" data-side="home" data-house="garnet" style="background:#e11d48" title="GARNET (Red)"></button>
-            <button class="house-swatch" data-side="home" data-house="emerald" style="background:#10b981" title="EMERALD (Green)"></button>
-            <button class="house-swatch" data-side="home" data-house="topaz" style="background:#eab308" title="TOPAZ (Yellow)"></button>
+            <button type="button" class="house-swatch" data-side="home" data-house="garnet" data-name="GARNET" data-short="GAR" data-color="#e11d48" data-secondary-color="#7f1d1d" data-hotkey="KeyG" title="Set home team to GARNET (G)"><span class="house-swatch-color" style="background:#e11d48"></span>GARNET</button>
+            <button type="button" class="house-swatch" data-side="home" data-house="emerald" data-name="EMERALD" data-short="EME" data-color="#10b981" data-secondary-color="#064e3b" data-hotkey="KeyE" title="Set home team to EMERALD (E)"><span class="house-swatch-color" style="background:#10b981"></span>EMERALD</button>
+            <button type="button" class="house-swatch" data-side="home" data-house="topaz" data-name="TOPAZ" data-short="TOP" data-color="#eab308" data-secondary-color="#713f12" data-hotkey="KeyT" title="Set home team to TOPAZ (T)"><span class="house-swatch-color" style="background:#eab308"></span>TOPAZ</button>
           </div>
           <div class="house-preset-row">
             <span class="house-preset-label">AWAY</span>
-            <button class="house-swatch" data-side="away" data-house="garnet" style="background:#e11d48" title="GARNET (Red)"></button>
-            <button class="house-swatch" data-side="away" data-house="emerald" style="background:#10b981" title="EMERALD (Green)"></button>
-            <button class="house-swatch" data-side="away" data-house="topaz" style="background:#eab308" title="TOPAZ (Yellow)"></button>
+            <button type="button" class="house-swatch" data-side="away" data-house="garnet" data-name="GARNET" data-short="GAR" data-color="#e11d48" data-secondary-color="#7f1d1d" data-hotkey="KeyG" title="Set away team to GARNET (G)"><span class="house-swatch-color" style="background:#e11d48"></span>GARNET</button>
+            <button type="button" class="house-swatch" data-side="away" data-house="emerald" data-name="EMERALD" data-short="EME" data-color="#10b981" data-secondary-color="#064e3b" data-hotkey="KeyE" title="Set away team to EMERALD (E)"><span class="house-swatch-color" style="background:#10b981"></span>EMERALD</button>
+            <button type="button" class="house-swatch" data-side="away" data-house="topaz" data-name="TOPAZ" data-short="TOP" data-color="#eab308" data-secondary-color="#713f12" data-hotkey="KeyT" title="Set away team to TOPAZ (T)"><span class="house-swatch-color" style="background:#eab308"></span>TOPAZ</button>
           </div>
         </div>
 

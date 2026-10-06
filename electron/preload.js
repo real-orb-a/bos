@@ -38,7 +38,10 @@ contextBridge.exposeInMainWorld('bosAPI', {
     clockToggle: () => ipcRenderer.invoke('match:clockToggle'),
     clockReset: () => ipcRenderer.invoke('match:clockReset'),
     setClock: (data) => ipcRenderer.invoke('match:setClock', data),
+    setStartTime: (seconds) => ipcRenderer.invoke('match:setStartTime', seconds),
     setTimerMode: (mode) => ipcRenderer.invoke('match:setTimerMode', mode),
+      setAdditionalTimeMode: (mode) => ipcRenderer.invoke('match:setAdditionalTimeMode', mode),
+      approveAdditionalTime: () => ipcRenderer.invoke('match:approveAdditionalTime'),
     setPeriod: (p) => ipcRenderer.invoke('match:setPeriod', p),
     onClockTick: (callback) => {
       const cb = (_, data) => callback(data);
@@ -106,6 +109,7 @@ contextBridge.exposeInMainWorld('bosAPI', {
   replay: {
     getStatus: () => ipcRenderer.invoke('replay:getStatus'),
     capture: (options) => ipcRenderer.invoke('replay:capture', options),
+    captureAll: () => ipcRenderer.invoke('replay:captureAll'),
     air: (clip) => ipcRenderer.invoke('replay:air', clip),
     onStateChanged: (callback) => {
       const cb = (_, data) => callback(data);
@@ -129,6 +133,8 @@ contextBridge.exposeInMainWorld('bosAPI', {
     clearQueue: () => ipcRenderer.invoke('graphics:clearQueue'),
     triggerGoalAnimation: (team, options) => ipcRenderer.invoke('graphics:triggerGoalAnimation', { team, options }),
     triggerTransition: (data) => ipcRenderer.invoke('graphics:triggerTransition', data),
+    getScorebugVisible: () => ipcRenderer.invoke('graphics:getScorebugVisible'),
+    setScorebugVisible: (visible) => ipcRenderer.invoke('graphics:setScorebugVisible', visible),
     onQueueUpdated: (callback) => {
       const cb = (_, data) => callback(data);
       ipcRenderer.on('graphics:queueUpdated', cb);
@@ -139,6 +145,7 @@ contextBridge.exposeInMainWorld('bosAPI', {
   // Goal Workflow
   workflow: {
     triggerGoal: (team, options) => ipcRenderer.invoke('goal:trigger', { team, options }),
+    continueToLive: () => ipcRenderer.invoke('goal:continueToLive'),
     abort: () => ipcRenderer.invoke('goal:abort'),
     getStatus: () => ipcRenderer.invoke('goal:getStatus'),
     onStarted: (callback) => {

@@ -10,6 +10,7 @@ class ScoreManager extends EventEmitter {
       short: teams.home?.short || 'GAR',
       color: teams.home?.color || '#e11d48',
       secondaryColor: teams.home?.secondaryColor || '#7f1d1d',
+      hotkey: teams.home?.hotkey || this._defaultGoalHotkey(teams.home?.name, 'KeyG'),
       score: teams.home?.score || 0,
       logo: teams.home?.logo || ''
     };
@@ -18,6 +19,7 @@ class ScoreManager extends EventEmitter {
       short: teams.away?.short || 'TOP',
       color: teams.away?.color || '#eab308',
       secondaryColor: teams.away?.secondaryColor || '#713f12',
+      hotkey: teams.away?.hotkey || this._defaultGoalHotkey(teams.away?.name, 'KeyT'),
       score: teams.away?.score || 0,
       logo: teams.away?.logo || ''
     };
@@ -83,6 +85,11 @@ class ScoreManager extends EventEmitter {
     this._persist();
     this.emit('teamsUpdated', this.getScore());
     return this.getScore();
+  }
+
+  _defaultGoalHotkey(name, fallback) {
+    const hotkeys = { GARNET: 'KeyG', EMERALD: 'KeyE', TOPAZ: 'KeyT' };
+    return hotkeys[String(name || '').toUpperCase()] || fallback;
   }
 
   _persist() {

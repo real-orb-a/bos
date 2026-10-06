@@ -6,10 +6,10 @@ class MessagesManager extends EventEmitter {
     this.queue = [];
     this.activeGraphic = null;
     this.presets = [
-      { id: 'under_review', title: 'UNDER REVIEW', subtitle: 'DECISION PENDING', style: 'alert', duration: 6 },
-      { id: 'goal_check', title: 'GOAL CHECK', subtitle: 'POSSIBLE OFFSIDE', style: 'alert', duration: 6 },
-      { id: 'decision_confirmed', title: 'DECISION CONFIRMED', subtitle: 'GOAL AWARDED', style: 'f1-banner', duration: 4 },
-      { id: 'no_goal', title: 'NO GOAL', subtitle: 'DECISION OVERTURNED', style: 'alert', duration: 5 },
+      { id: 'under_review', title: 'UNDER REVIEW', subtitle: 'DECISION PENDING', style: 'standard', duration: 6 },
+      { id: 'goal_check', title: 'GOAL CHECK', subtitle: 'POSSIBLE OFFSIDE', style: 'standard', duration: 6 },
+      { id: 'decision_confirmed', title: 'DECISION CONFIRMED', subtitle: 'GOAL AWARDED', style: 'standard', duration: 4 },
+      { id: 'no_goal', title: 'NO GOAL', subtitle: 'DECISION OVERTURNED', style: 'standard', duration: 5 },
       { id: 'match_delayed', title: 'MATCH DELAYED', subtitle: 'WEATHER / SAFETY', style: 'standard', duration: 8 },
       { id: 'resuming_shortly', title: 'MATCH RESUMING SHORTLY', subtitle: 'PLAYERS ON PITCH', style: 'standard', duration: 6 },
       { id: 'technical_difficulty', title: 'TECHNICAL DIFFICULTY', subtitle: 'PLEASE STAND BY', style: 'standard', duration: 8 },
@@ -28,7 +28,7 @@ class MessagesManager extends EventEmitter {
       subtitle: item.subtitle || '',
       duration: item.duration || 5,
       position: item.position || 'bottom-left',
-      style: item.style || 'standard',
+      style: 'standard',
       timestamp: Date.now()
     };
     this.queue.push(queueItem);

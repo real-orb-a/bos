@@ -73,7 +73,10 @@ function registerIpcHandlers({
   ipcMain.handle('match:setClock', (_, data) =>
     matchEngine.setClock(data || {})
   );
+  ipcMain.handle('match:setStartTime', (_, seconds) => matchEngine.setStartTime(seconds));
   ipcMain.handle('match:setTimerMode', (_, mode) => matchEngine.setTimerMode(mode));
+  ipcMain.handle('match:setAdditionalTimeMode', (_, mode) => matchEngine.setAdditionalTimeMode(mode));
+  ipcMain.handle('match:approveAdditionalTime', () => matchEngine.approveAdditionalTime());
   ipcMain.handle('match:setPeriod', (_, period) => matchEngine.setPeriod(period));
 
   // --- Score IPC Handlers ---
@@ -96,6 +99,7 @@ function registerIpcHandlers({
 
   // Operation A — Capture Replay: trigger Source Record's Save Replay Buffer hotkey.
   ipcMain.handle('replay:capture', async (_, options) => await replayEngine.captureReplay(options || {}));
+  ipcMain.handle('replay:captureAll', async () => await replayEngine.captureAllReplays());
   ipcMain.handle('replay:air', async (_, clip) => await replayEngine.airReplay(clip));
 
   // --- Graphics IPC Handlers ---
@@ -117,9 +121,12 @@ function registerIpcHandlers({
     graphicsEngine.triggerGoalAnimation(team, options)
   );
   ipcMain.handle('graphics:triggerTransition', (_, data) => graphicsEngine.triggerTransition(data));
+  ipcMain.handle('graphics:getScorebugVisible', () => graphicsEngine.scorebugVisible);
+  ipcMain.handle('graphics:setScorebugVisible', (_, visible) => graphicsEngine.setScorebugVisible(visible));
 
   // --- Goal Workflow IPC Handlers ---
   ipcMain.handle('goal:trigger', async (_, { team, options }) => await goalWorkflow.triggerGoal(team, options));
+  ipcMain.handle('goal:continueToLive', () => goalWorkflow.continueToLive());
   ipcMain.handle('goal:abort', async () => await goalWorkflow.abort());
   ipcMain.handle('goal:getStatus', () => goalWorkflow.getStatus());
 

@@ -10,6 +10,7 @@ window.ReplayModule = (function() {
   const requestDetail = document.getElementById('replay-request-detail');
   const sourceButtons = document.getElementById('replay-source-buttons');
   const btnSaveReplay = document.getElementById('btn-save-replay');
+  let triggerResetTimer = null;
 
   function init() {
     bindEvents();
@@ -19,13 +20,15 @@ window.ReplayModule = (function() {
 
   function bindEvents() {
     btnSaveReplay.addEventListener('click', () => {
-      doCapture({});
+        doCapture({ all: true });
     });
   }
 
   async function doCapture(options) {
     try {
-      const result = await window.bosAPI.replay.capture(options);
+      const result = options && options.all
+        ? await window.bosAPI.replay.captureAll()
+        : await window.bosAPI.replay.capture(options);
       // The state event will already have re-rendered; fetch fresh status anyway.
       loadStatus();
       return result;
@@ -47,6 +50,10 @@ window.ReplayModule = (function() {
   function renderStatus(status) {
     if (!status) return;
     const st = status.state || 'IDLE';
+    const lastTriggeredAt = status.lastTriggeredAt || (status.lastResult && status.lastResult.timestamp);
+    const lastTriggeredText = lastTriggeredAt
+      ? `LAST TRIGGERED ${new Date(lastTriggeredAt).toLocaleTimeString()}`
+      : 'LAST TRIGGERED NEVER';
 
     // State pill
     statePill.textContent = st;
@@ -55,35 +62,31 @@ window.ReplayModule = (function() {
     else if (st === 'TRIGGERED') statePill.classList.add('ok');
     else if (st === 'ERROR') statePill.classList.add('error');
 
-    // Status card
     requestDot.className = 'replay-request-dot';
     if (st === 'TRIGGERING') {
+      clearTimeout(triggerResetTimer);
+      triggerResetTimer = null;
       requestDot.classList.add('busy');
-      requestText.textContent = 'Saving Replay… (request sent to OBS)';
+      requestText.textContent = 'SAVING REPLAY';
+      requestDetail.textContent = lastTriggeredText;
     } else if (st === 'TRIGGERED') {
       requestDot.classList.add('ok');
-      requestText.textContent = 'Replay Triggered — Source Record is saving the buffer.';
+      requestText.textContent = 'REPLAY TRIGGERED';
+      requestDetail.textContent = lastTriggeredText;
+      if (!triggerResetTimer) {
+        triggerResetTimer = setTimeout(() => {
+          triggerResetTimer = null;
+          renderStatus({ ...status, state: 'IDLE' });
+        }, 1600);
+      }
     } else if (st === 'ERROR') {
       requestDot.classList.add('error');
-      requestText.textContent = 'Could not trigger the Source Record hotkey.';
+      requestText.textContent = 'REPLAY TRIGGER FAILED';
+      requestDetail.textContent = status.lastError || lastTriggeredText;
     } else {
       requestDot.classList.add('idle');
-      requestText.textContent = status.enabled
-        ? 'Ready — Source Record owns the replay buffer.'
-        : 'Replay capture is disabled (replay.enabled = false).';
-    }
-
-    // Detail line
-    if (status.lastError) {
-      requestDetail.textContent = `Error: ${status.lastError}`;
-    } else if (status.lastResult) {
-      const r = status.lastResult;
-      const when = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : '';
-      requestDetail.textContent = `${when} · hotkey=${r.hotkeyName}${r.contextName ? ' · context=' + r.contextName : ''}${r.sourceId ? ' · source=' + r.sourceId : ''}`;
-    } else if (!status.enabled) {
-      requestDetail.textContent = 'Enable it in Settings → OBS WebSocket → Source Record Replay Capture.';
-    } else {
-      requestDetail.textContent = 'No replay save requested yet.';
+      requestText.textContent = status.enabled ? 'READY' : 'REPLAY CAPTURE DISABLED';
+      requestDetail.textContent = lastTriggeredText;
     }
 
     renderSourceButtons(status.sources || []);

@@ -13,7 +13,7 @@
     subtitleEl.style.display = data.subtitle ? 'block' : 'none';
 
     // Right-hand highlight block: small label (badge) + big accent value.
-    badgeText.textContent = data.style === 'alert' ? 'OFFICIAL NOTICE' : (data.badge || 'BROADCAST');
+    badgeText.textContent = data.badge || 'BROADCAST';
     valueEl.textContent = data.value || '';
 
     // House colour accent (Garnet / Emerald / Topaz, or a custom broadcast colour)

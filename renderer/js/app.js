@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const seqTitle = document.getElementById('seq-title');
   const seqStepPill = document.getElementById('seq-step-pill');
   const btnAbortSequence = document.getElementById('btn-abort-sequence');
+  const btnContinueSequence = document.getElementById('btn-continue-sequence');
 
   const btnEmergencyAbort = document.getElementById('btn-emergency-abort');
 
@@ -50,6 +51,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     await window.bosAPI.workflow.abort();
     activeSequenceBar.classList.add('hidden');
     updateProgramStatus('LIVE');
+  });
+
+  btnContinueSequence.addEventListener('click', async () => {
+    btnContinueSequence.disabled = true;
+    try {
+      await window.bosAPI.workflow.continueToLive();
+    } finally {
+      btnContinueSequence.disabled = false;
+    }
   });
 
   // Preview Drawer Toggle
@@ -98,6 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Workflow Events
   window.bosAPI.workflow.onStarted((wf) => {
     activeSequenceBar.classList.remove('hidden');
+    btnContinueSequence.classList.add('hidden');
     seqTitle.textContent = `AUTOMATED GOAL SEQUENCE: ${wf.team.toUpperCase()} GOAL`;
     seqStepPill.textContent = 'INITIATING';
     updateProgramStatus('GOAL');
@@ -105,15 +116,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   window.bosAPI.workflow.onStep((data) => {
     seqStepPill.textContent = data.step.replace(/_/g, ' ');
+    btnContinueSequence.classList.toggle('hidden', data.step !== 'WAITING_FOR_GO_AHEAD');
   });
 
   window.bosAPI.workflow.onCompleted(() => {
     activeSequenceBar.classList.add('hidden');
+    btnContinueSequence.classList.add('hidden');
     updateProgramStatus('LIVE');
   });
 
   window.bosAPI.workflow.onAborted(() => {
     activeSequenceBar.classList.add('hidden');
+    btnContinueSequence.classList.add('hidden');
     updateProgramStatus('LIVE');
   });
 
@@ -161,7 +175,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // --- Keyboard Shortcuts (Section 28) ---
+  const keyboardShortcutsReadyAt = Date.now() + 1500;
   window.addEventListener('keydown', (e) => {
+    if (e.repeat || Date.now() < keyboardShortcutsReadyAt) return;
+
     // Avoid triggering when user is typing in an input
     const tag = e.target.tagName.toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select') {
@@ -170,29 +187,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const code = e.code;
 
-    // G: Garnet Goal
-    if (code === 'KeyG') {
+    // Team-specific score keys (configured in Teams & Branding).
+    if (window.MatchModule.handleGoalHotkey(code)) {
       e.preventDefault();
-      window.MatchModule.triggerGoalSequence('home');
-    }
-    // T: Topaz Goal
-    else if (code === 'KeyT') {
-      e.preventDefault();
-      window.MatchModule.triggerGoalSequence('away');
     }
     // R: Save Replay (trigger Source Record hotkey)
-    else if (code === 'KeyR') {
+    else if (code === 'KeyR' && !e.defaultPrevented) {
       e.preventDefault();
       window.ReplayModule.doCapture({});
     }
     // L: Emergency Return to Live
-    else if (code === 'KeyL') {
+    else if (code === 'KeyL' && !e.defaultPrevented) {
       e.preventDefault();
       window.bosAPI.system.emergencyAbort();
       updateProgramStatus('LIVE');
     }
     // U: Under Review (Quick)
-    else if (code === 'KeyU') {
+    else if (code === 'KeyU' && !e.defaultPrevented) {
       e.preventDefault();
       window.bosAPI.graphics.showLowerThird({
         title: 'UNDER REVIEW',
@@ -203,12 +214,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
     // H: Hide Lower Third
-    else if (code === 'KeyH') {
+    else if (code === 'KeyH' && !e.defaultPrevented) {
       e.preventDefault();
       window.bosAPI.graphics.hideLowerThird();
     }
     // Space: Start/Pause Match Clock
-    else if (code === 'Space') {
+    else if (code === 'Space' && !e.defaultPrevented) {
       e.preventDefault();
       window.bosAPI.match.clockToggle();
     }

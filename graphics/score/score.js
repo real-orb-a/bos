@@ -10,6 +10,7 @@
   const clockEl = document.getElementById('clock-display');
   const periodEl = document.getElementById('period-display');
   const stoppageEl = document.getElementById('stoppage-display');
+  const scorebug = document.getElementById('score-bug');
 
   let currentHomeScore = 0;
   let currentAwayScore = 0;
@@ -53,8 +54,7 @@
     if (clock.period) {
       periodEl.textContent = clock.period.toUpperCase();
     }
-    // Additional-time overlay: appears below the clock once the set time is done
-    // and counts the added time (+1:00 → +N:00).
+    // Additional-time overlay: appears below the frozen clock and counts from 00:00.
     if (clock.inStoppage && clock.stoppageDisplay) {
       stoppageEl.textContent = clock.stoppageDisplay;
       stoppageEl.classList.remove('hidden');
@@ -84,8 +84,11 @@
           if (msg.score) {
             updateDisplay(msg.score, 'none');
           }
+          setScorebugVisible(msg.scorebugVisible !== false);
         } else if (msg.type === 'SCORE_UPDATE') {
           updateDisplay(msg, msg.animation || 'pop', msg.changedTeam);
+        } else if (msg.type === 'SCOREBUG_VISIBILITY') {
+          setScorebugVisible(msg.visible);
         } else if (msg.type === 'CLOCK_UPDATE') {
           if (msg.clock) {
             applyClock(msg.clock);
@@ -104,6 +107,10 @@
     ws.onerror = (e) => {
       console.warn('[ScoreBug] WebSocket error:', e);
     };
+  }
+
+  function setScorebugVisible(visible) {
+    scorebug.classList.toggle('faded-out', !visible);
   }
 
   connectWebSocket();

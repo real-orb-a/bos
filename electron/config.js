@@ -23,8 +23,8 @@ class ConfigManager extends EventEmitter {
     this.config = {
       obs: { host: 'localhost', port: 4455, password: '', autoReconnect: true, reconnectIntervalMs: 3000 },
       teams: {
-        home: { name: 'GARNET', short: 'GAR', color: '#e11d48', secondaryColor: '#7f1d1d', score: 0 },
-        away: { name: 'TOPAZ', short: 'TOP', color: '#eab308', secondaryColor: '#713f12', score: 0 },
+        home: { name: 'GARNET', short: 'GAR', color: '#e11d48', secondaryColor: '#7f1d1d', hotkey: 'KeyG', score: 0 },
+        away: { name: 'TOPAZ', short: 'TOP', color: '#eab308', secondaryColor: '#713f12', hotkey: 'KeyT', score: 0 },
         // The three houses: Garnet (red), Emerald (green), Topaz (yellow).
         // Teams pick their palette from here; colours drive every broadcast graphic.
         houses: {
@@ -37,11 +37,11 @@ class ConfigManager extends EventEmitter {
       replay: {
         enabled: true,
         hotkeyName: 'ReplayBuffer.Save',
-        contextName: 'Game Capture - Source Record',
+        contextName: 'test1 - Source Record',
         captureSources: [
-          { id: 'main', name: 'Main Program', enabled: true, hotkeyName: 'ReplayBuffer.Save', contextName: '' },
-          { id: 'cam1', name: 'Camera 1', enabled: false, hotkeyName: 'ReplayBuffer.Save', contextName: '' },
-          { id: 'cam2', name: 'Camera 2', enabled: false, hotkeyName: 'ReplayBuffer.Save', contextName: '' }
+          { id: 'main', name: 'Main Program', enabled: true, hotkeyName: '', contextName: '' },
+          { id: 'cam1', name: 'Camera 1', enabled: false, hotkeyName: '', contextName: '' },
+          { id: 'cam2', name: 'Camera 2', enabled: false, hotkeyName: '', contextName: '' }
         ]
       },
       graphics: { httpPort: 8088, wsPort: 8088, defaultLowerThirdDuration: 5, animationStyle: 'slide-in', lowerThirdColor: '#eab308' },
@@ -49,6 +49,9 @@ class ConfigManager extends EventEmitter {
       match: {
         // 'stopwatch' counts up to the set time (football), 'countdown' counts down (basketball).
         timerMode: 'stopwatch',
+          // 'automatic' starts added time at regulation; 'approval' waits for GO AHEAD.
+          additionalTimeMode: 'automatic',
+        periodLabel: '1st Half',
         // The "set time": minutes the clock runs before additional/stoppage time.
         regulationMinutes: 90
       },

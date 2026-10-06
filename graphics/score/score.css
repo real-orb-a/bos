@@ -26,7 +26,18 @@ body {
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(12px);
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0s;
+}
+
+.score-bug.faded-out {
+  opacity: 0;
+  transform: translateY(-8px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s;
 }
 
 .team {
@@ -39,12 +50,12 @@ body {
 .team-color-bar {
   width: 6px;
   height: 100%;
-  background: #e11d48;
+  background: currentColor;
   transition: background-color 0.3s ease;
 }
 
 .team-away .team-color-bar {
-  background: #0284c7;
+  background: currentColor;
 }
 
 .team-meta {

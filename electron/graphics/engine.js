@@ -27,6 +27,7 @@ class GraphicsEngine extends EventEmitter {
     this.connectedClients = new Set();
     this.replayOverlayActive = false;
     this.replayOverlayData = null;
+    this.scorebugVisible = true;
     this.topMessageActive = false;
     this.topMessageData = null;
 
@@ -71,19 +72,16 @@ class GraphicsEngine extends EventEmitter {
       this.broadcastScoreUpdate(animation, data.team);
     });
 
-    this.matchEngine.on('clockTick', (clock) => {
-      this.broadcast({
-        type: 'CLOCK_UPDATE',
-        clock
-      });
+    this.scoreManager.on('teamsUpdated', () => {
+      this.broadcastScoreUpdate('update', 'both');
     });
 
-    this.matchEngine.on('clockChanged', (clock) => {
-      this.broadcast({
-        type: 'CLOCK_UPDATE',
-        clock
-      });
-    });
+    this.matchEngine.on('clockTick', (clock) => this._broadcastClockUpdate(clock));
+    this.matchEngine.on('clockChanged', (clock) => this._broadcastClockUpdate(clock));
+  }
+
+  _broadcastClockUpdate(clock) {
+    this.broadcast({ type: 'CLOCK_UPDATE', clock });
   }
 
   _processNextInQueue() {
@@ -179,7 +177,8 @@ class GraphicsEngine extends EventEmitter {
         replayOverlay: {
           active: this.replayOverlayActive,
           data: this.replayOverlayData
-        }
+        },
+        scorebugVisible: this.scorebugVisible
       };
       ws.send(JSON.stringify(initPayload));
 
@@ -232,6 +231,15 @@ class GraphicsEngine extends EventEmitter {
   broadcastScoreUpdate(animationType = 'pop', changedTeam = null) {
     const payload = this.scoreGraphics.getPayload(animationType, changedTeam);
     this.broadcast(payload);
+  }
+
+  setScorebugVisible(visible) {
+    this.scorebugVisible = !!visible;
+    this.broadcast({
+      type: 'SCOREBUG_VISIBILITY',
+      visible: this.scorebugVisible
+    });
+    return this.scorebugVisible;
   }
 
   // Used by workflows to choose the score animation before the score actually

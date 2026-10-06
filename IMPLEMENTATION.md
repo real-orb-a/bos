@@ -1,777 +1,305 @@
-# BOS — Broadcast Operator System
-## Implementation Reference & Code Spec (v1.0)
+# BOS Implementation Reference
 
-> This document explains **what the code in this repository actually does** — how BOS is
-> built, what every module is responsible for, how data flows through the system, and how
-> the pieces fit together. It is the implementation companion to `spec.md` (requirements)
-> and `addon.md` (graphics/animation requirements).
+This document describes the behavior implemented in this repository. It is intended to be a practical guide to the runtime architecture, operator workflows, configuration, OBS setup, and current limitations. The source code is authoritative if behavior changes.
 
----
+BOS is an Electron control application for OBS Studio. It manages the match clock and score, triggers Source Record replay-buffer saves, sends graphics to OBS Browser Sources, and coordinates goal transitions. It does not capture, edit, or play replay video itself.
 
-## 1. What BOS Is
+## 1. Runtime Overview
 
-BOS is a cross-platform **desktop broadcast-control application** built on **Node.js + Electron**.
-It sits *above* OBS Studio: the operator presses buttons in the BOS dashboard, and BOS
-orchestrates OBS, FFmpeg, and HTML/CSS/JS broadcast graphics to run a sports TV broadcast.
+```text
+Electron main process
+  ConfigManager ─ MatchEngine / ScoreManager / EventLogger
+  OBSClient ─ ScenesController / SourcesController / TransitionsController
+  GraphicsEngine (HTTP + WebSocket, default port 8088)
+  ReplayEngine (OBS Source Record hotkey triggers)
+  GoalWorkflowManager
+          │
+          ├── Electron IPC through preload.js
+          ▼
+Electron renderer dashboard
+          │
+          ├── OBS WebSocket v5 (through main process, default port 4455)
+          └── OBS Browser Sources (HTTP + WebSocket through GraphicsEngine)
+```
 
-The division of labour (the core principle from the spec — §31):
+The main process owns application state and privileged operations. The renderer uses `window.bosAPI` from `electron/preload.js`; it does not import Node or Electron APIs directly. OBS remains responsible for scene composition and program output. Browser Sources render the scorebug, banners, transition, goal graphic, replay overlay, and optional top message.
 
-| System | Knows |
+Replay capture is different from replay airing: BOS asks OBS to trigger a Source Record hotkey. Source Record owns the replay buffers and writes the recordings. BOS does not locate, trim, load, or play those saved files.
+
+## 2. Repository Layout
+
+```text
+config/bos.json                 Operator configuration
+
+electron/main.js                Application lifecycle and dependency wiring
+electron/config.js              ConfigManager
+electron/preload.js             Secure renderer API
+electron/ipc/handlers.js         IPC handlers and event forwarding
+electron/obs/client.js          OBS WebSocket connection and requests
+electron/obs/scenes.js          Scene enumeration and switching
+electron/obs/sources.js         OBS media/browser-source helpers
+electron/obs/transitions.js     OBS transition selection and duration
+electron/match/engine.js        Match state and clock
+electron/match/score.js         Team, score, branding, and goal-key state
+electron/match/events.js        In-memory event log
+electron/match/goalWorkflow.js  Automated goal sequence
+electron/replay/engine.js       Source Record hotkey capture service
+electron/graphics/engine.js     Graphics HTTP/WebSocket server and state
+
+electron/graphics/score.js      Score/clock payload builder
+electron/graphics/goal.js       Goal animation payload builder
+electron/graphics/lowerThird.js Lower-third lifecycle and timer
+electron/graphics/messages.js   Presets and lower-third queue
+electron/graphics/packages.js  Package listing/resolution code
+
+renderer/index.html             Operator dashboard and settings modal
+renderer/css/main.css           Dashboard layout/theme
+renderer/css/components.css     Dashboard component styles
+renderer/js/app.js              OBS status, goal workflow banner, global hotkeys
+renderer/js/match.js            Score, match, clock, team-branding controls
+renderer/js/replay.js            Source Record capture status and camera buttons
+renderer/js/graphics.js          Lower thirds, presets, and queue
+renderer/js/settings.js          Settings form and persistence
+
+graphics/score/                 Scorebug Browser Source
+graphics/goal/                  Goal celebration Browser Source
+graphics/lower-third/           Lower-third Browser Source
+graphics/top-message/           Optional top-message Browser Source
+graphics/replay/                Replay badge/overlay Browser Source
+graphics/transitions/           Custom transition Browser Source
+packages/ssl_media_2026/        Example broadcast package
+```
+
+There is no FFmpeg recorder, clip library, timeline, clip-sequence manager, or multi-angle video assembler in the current `electron/replay/` directory.
+
+## 3. Startup and Shutdown
+
+`electron/main.js` initializes the application in this order:
+
+1. Load `ConfigManager` from `config/bos.json`.
+2. Construct `ScoreManager`, `EventLogger`, and `MatchEngine`.
+3. Construct `OBSClient` and the scene, source, and transition controllers.
+4. Start `GraphicsEngine` and create `ReplayEngine` and `GoalWorkflowManager`.
+5. Create the dashboard `BrowserWindow`, register IPC handlers, then attempt an OBS connection.
+
+The window uses `contextIsolation: true` and `nodeIntegration: false`. If OBS is unavailable, BOS reports disconnected and retries when `obs.autoReconnect` is enabled. OBS-dependent calls fail while disconnected; there is no mock/simulator mode.
+
+On quit, the app destroys the replay service, closes the graphics WebSocket/HTTP servers, clears the match clock interval, and disconnects OBS.
+
+## 4. Configuration
+
+`ConfigManager` reads and parses `config/bos.json`. If it cannot load that file, it creates in-code defaults. `get('a.b')` reads a dotted path, `set('a.b', value)` persists an individual value immediately, and `updateAll()` shallow-merges top-level sections and writes the result.
+
+Score and team updates are persisted by `ScoreManager`. Match period labels, explicit clock start times, timer modes, and added-time mode are persisted by `MatchEngine`. Settings edits are saved through the Config tab in the dashboard.
+
+### Main configuration groups
+
+| Key | Purpose |
 | :--- | :--- |
-| **BOS** | WHAT should happen, WHEN, and WHY |
-| **OBS** | HOW the final video is composited and output |
-| **FFmpeg** | HOW replay media is captured and processed |
-| **Graphics (Browser Sources)** | HOW broadcast graphics are rendered and animated |
+| `obs.host`, `obs.port`, `obs.password` | OBS WebSocket v5 connection. Defaults are `localhost:4455`; leave password blank if OBS authentication is disabled. |
+| `obs.autoReconnect`, `obs.reconnectIntervalMs` | Reconnection behavior. |
+| `teams.home`, `teams.away` | Each side's `name`, `short`, `color`, `secondaryColor`, `hotkey`, score, and optional logo. Scores and team data are persisted. |
+| `scenes.liveScene`, `scenes.replayScene`, `scenes.graphicsScene` | Scene names used by the scene controller. |
+| `scenes.replayMediaSource` | OBS Media Source name used by helper methods; replay airing is not currently wired to it. |
+| `replay.enabled` | Enables/disables Source Record hotkey requests. |
+| `replay.hotkeyName`, `replay.contextName` | Shared fallback values for OBS `TriggerHotkeyByName`. |
+| `replay.captureSources` | Camera/source entries: `{id, name, enabled, hotkeyName, contextName}`. Blank per-source hotkey/context values inherit the shared fallback. |
+| `goalWorkflow.showGoalAnimation`, `goalWorkflow.goalAnimationDuration` | Goal graphic visibility and duration. |
+| `goalWorkflow.captureReplayOnGoal` | Whether a goal invokes replay capture. |
+| `goalWorkflow.replaySourceId` | Blank captures every enabled camera in sequence; an ID captures only that source. |
+| `goalWorkflow.celebrationDurationSeconds` | Hold before the REPLAY scene transition. |
+| `match.timerMode` | `stopwatch` or `countdown`. |
+| `match.regulationMinutes` | Main clock regulation/set duration in minutes. |
+| `match.startSeconds` | Optional configured start/reset time in seconds, set from the `MM:SS` control. |
+| `match.periodLabel` | Free-text period label, for example `Q1` or `First Half`. |
+| `match.additionalTimeMode` | `automatic` or `approval`; approval mode waits for GO AHEAD at regulation. |
+| `graphics.httpPort` | Graphics HTTP and WebSocket server port (default `8088`). WebSocket shares this port; `graphics.wsPort` is not bound separately. |
+| `graphics.defaultLowerThirdDuration`, `graphics.animationStyle`, `graphics.lowerThirdColor` | Lower-third defaults. |
+| `transitions.defaultTransition`, `transitions.durationMs` | OBS scene-transition defaults managed by `TransitionsController`. |
 
-Everything in the app runs in **Node.js**. There is no Windows-only code — FFmpeg is invoked
-as an external binary, and OBS is reached over WebSocket, so the same code runs on
-Windows / macOS / Linux.
+The checked-in configuration may contain operator-specific teams, scenes, or OBS connection settings. Do not copy credentials into documentation or share them publicly.
 
----
+## 5. IPC and State Flow
 
-## 2. Application Architecture
+The renderer can call only methods exposed by `contextBridge` in `electron/preload.js`. `electron/ipc/handlers.js` maps those methods to the main-process controllers.
 
-```text
-                     BOS (Electron)
-        ┌───────────────────────────────┐
-        │        MAIN PROCESS           │
-        │  ┌──────────┬──────────────┐  │
-        │  │  MATCH   │    REPLAY    │  │
-        │  │  ENGINE  │    ENGINE    │  │
-        │  └────┬─────┴──────┬───────┘  │
-        │     OBS │       FFmpeg       │
-        │   ┌─────▼──────────▼───────┐  │
-        │   │    GRAPHICS ENGINE     │  │
-        │   │   HTTP :8088 + WebSocket│ │
-        │   └────────────────────────┘  │
-        └──────────────┬────────────────┘
-                       │ IPC (window.bosAPI)
-        ┌──────────────▼────────────────┐
-        │          RENDERER             │
-        │     Dashboard (HTML/CSS/JS)   │
-        └───────────────────────────────┘
-                │                │
-                ▼                ▼
-        OBS Studio ────────  Browser Sources
-        (WebSocket :4455)   (ws://localhost:8088)
-```
-
-Two processes, one job:
-
-* **Main process** (`electron/`) — owns OBS, FFmpeg, the match/score state, and the graphics
-  server. Nothing privileged is exposed to the UI except through typed IPC calls.
-* **Renderer** (`renderer/`) — the operator dashboard. It only calls `window.bosAPI.*` and
-  renders the UI. It cannot touch OBS, the filesystem, or FFmpeg directly.
-
----
-
-## 3. Repository Layout
-
-```text
-bos/
-├── package.json               # "npm start" → electron ., "npm test" → node test.js
-├── spec.md                    # Original requirements spec (v1.0)
-├── addon.md                   # Graphics & animation addendum (v1.0)
-├── IMPLEMENTATION.md          # THIS FILE
-│
-├── config/bos.json            # The single JSON configuration file
-│
-├── electron/                  # ── MAIN PROCESS (all privileged work happens here) ──
-│   ├── main.js                # Electron lifecycle, wiring, window creation
-│   ├── preload.js             # Exposes the secure window.bosAPI bridge to the renderer
-│   ├── config.js              # ConfigManager: read/write config/bos.json
-│   ├── obs/                   # OBS WebSocket controller (v5)
-│   │   ├── client.js          #   connection, auth, auto-reconnect, ping, simulator mode
-│   │   ├── scenes.js          #   scene switching / enumeration
-│   │   ├── sources.js         #   media playback, browser refresh, source visibility
-│   │   └── transitions.js     #   transition selection + duration
-│   ├── match/                 # Match / score engine
-│   │   ├── engine.js          #   match state machine + match clock
-│   │   ├── score.js           #   home/away score tracking
-│   │   ├── events.js          #   chronological event log
-│   │   └── goalWorkflow.js    #   the automated 10-step goal sequence
-│   ├── replay/                # Replay engine
-│   │   ├── engine.js          #   replay coordinator (play/stop/status)
-│   │   ├── buffer.js          #   rolling buffer window model (default 180s)
-│   │   ├── recorder.js        #   continuous FFmpeg segment capture (synthetic mode)
-│   │   ├── cameras.js         #   multi-camera capture — one rolling buffer per camera view
-│   │   ├── obsCapture.js      #   direct clip capture via OBS Replay Buffer (WebSocket)
-│   │   ├── clips.js           #   clip generation, OBS-file adoption, clip index & trim pass
-│   │   ├── sequence.js        #   clip sequence cycler (playlist) & cycle playback
-│   │   └── slowmotion.js      #   FFmpeg setpts/atempo slow-motion (½×, ¼×)
-│   ├── graphics/              # Graphics engine
-│   │   ├── engine.js          #   HTTP(:8088) + WebSocket server for OBS Browser Sources
-│   │   ├── score.js           #   SCORE_UPDATE payload builder
-│   │   ├── goal.js            #   GOAL_ANIMATION payload builder
-│   │   ├── lowerThird.js      #   lower-third lifecycle + auto-dismiss timer
-│   │   ├── messages.js        #   message presets + graphics queue
-│   │   └── packages.js        #   broadcast package manager (loader; see §14.5)
-│   └── ipc/handlers.js        # All Electron IPC channels + event fan-out to the UI
-│
-├── renderer/                  # ── RENDERER (the operator dashboard) ──
-│   ├── index.html             # Dashboard markup (header, panels, settings modal)
-│   ├── css/main.css           # Layout + dark broadcast theme
-│   ├── css/components.css     # Component styles (buttons, cards, badges)
-│   └── js/
-│       ├── app.js             # Coordinator: OBS status, program badge, hotkeys
-│       ├── match.js           # Score, goals, match state, clock, event feed
-│       ├── replay.js          # Replay form, timeline scrubber, clips shelf
-│       ├── graphics.js        # Lower thirds, presets, queue panel
-│       └── settings.js        # Settings modal ↔ config/bos.json
-│
-├── graphics/                  # ── OBS Browser Sources (HTML/CSS/JS graphics) ──
-│   ├── score/                 # Score bug
-│   ├── goal/                  # Full-screen goal celebration
-│   ├── lower-third/           # Lower third + F1-style status banner
-│   ├── replay/                # Replay watermark / speed badge / progress bar
-│   └── transitions/           # Custom stinger (sliding panels) transition
-│
-├── packages/ssl_media_2026/   # Example pluggable "broadcast package" (see §14)
-├── media/                     # (reserved) animations / transitions / audio assets
-└── replay_cache/              # FFmpeg segment + clip storage (created at runtime)
-    ├── segments/              #   2-second rolling segments from the recorder
-    └── clips/                 #   Generated replay clips (.mp4)
-```
-
----
-
-## 4. How the Application Starts
-
-1. `package.json` sets `main` to `electron/main.js` and `npm start` runs the Electron binary.
-2. `main.js` (`initializeApp`) constructs every backend component in dependency order:
-   `ConfigManager → ScoreManager → EventLogger → MatchEngine → OBSClient → Scenes/Sources/
-   Transitions → GraphicsEngine → ReplayEngine → GoalWorkflowManager`.
-3. It creates the dashboard `BrowserWindow` (1480×940, dark theme, `nodeIntegration: false` —
-   the renderer is sandboxed).
-4. `registerIpcHandlers(...)` installs every IPC channel and subscribes main-process events
-   so they can be forwarded to the dashboard. The renderer loads `renderer/index.html`.
-5. `OBSClient.connect()` fires — if OBS Studio isn't running, BOS automatically switches to
-   **Simulator mode** (see §9.4) so the operator can still practise and run cues.
-6. On quit, `before-quit` tears down the replay recorder, graphics server, match clock, and
-   the OBS socket.
-
-The renderer **never** reads/writes the filesystem, spawns processes, or talks to OBS. All
-privileged operations are reachable only through the typed `window.bosAPI` bridge (§5).
-
----
-
-## 5. The IPC Bridge (`electron/preload.js` + `electron/ipc/handlers.js`)
-
-The renderer runs with `nodeIntegration: false`. The preload script is the only thing that
-can import Electron APIs in the renderer, so it exposes a single typed object:
-
-```js
-// In the renderer, this is the ONLY way to reach the backend:
-window.bosAPI.<group>.<method>(...)
-```
-
-### 5.1 Request/Response (renderer → main)
-
-`bosAPI` groups map one-to-one onto `ipcMain.handle` channels in `handlers.js`:
-
-| Group | Example calls | Backs onto |
-| :--- | :--- | :--- |
-| `obs` | `connect()`, `getStatus()`, `switchScene(name)`, `setTransition(name)`, `getScenes()` | `obs:*` handlers → OBS client/controllers |
-| `match` | `getState()`, `setState(s)`, `clockToggle()`, `setPeriod(p)`, `setClock({...})` | `match:*` → MatchEngine |
-| `score` | `addHome(1)`, `subtractAway(1)`, `set({home,away})`, `reset()`, `updateTeams(data)` | `score:*` → ScoreManager |
-| `events` | `get(limit)`, `record(type, details)`, `clear()` | `events:*` → EventLogger |
-| `replay` | `getStatus()`, `createClip(opts)`, `play(clip, speed, autoReturnLive)`, `stop()`, `deleteClip(f)`, `setBufferDuration(s)` | `replay:*` → ReplayEngine |
-| `sequence` | `getState()`, `add(entry)`, `remove(i)`, `move(from,to)`, `setSpeed(i,s)`, `setLoop(v)`, `setAutoAdvance(v)`, `setCurrent(i)`, `playNext()`, `playPrevious()`, `playIndex(i)`, `clear()` | `sequence:*` → ClipSequenceManager |
-| `graphics` | `showLowerThird(data)`, `hideLowerThird()`, `getPresets()`, `enqueue(item)`, `removeFromQueue(id)`, `clearQueue()`, `triggerGoalAnimation(team, opts)`, `triggerTransition(data)` | `graphics:*` → GraphicsEngine |
-| `workflow` | `triggerGoal(team, opts)`, `abort()`, `getStatus()` | `goal:*` → GoalWorkflowManager |
-| `system` | `emergencyAbort()` | master safety: abort workflow + stop replay + hide graphics + switch LIVE |
-| `config` | `get(key)`, `set(key, value)`, `updateAll(newConfig)` | `config:*` → ConfigManager |
-
-### 5.2 Events (main → renderer)
-
-`handlers.js` subscribes to every subsystem's EventEmitter and forwards to the UI:
-
-| Event | Channel delivered on |
+| `window.bosAPI` group | Main responsibilities |
 | :--- | :--- |
-| OBS connected / disconnected / scene changed / ping latency | `obs:statusChanged`, `obs:sceneChanged`, `obs:ping` |
-| Score changed / teams updated | `score:changed`, `score:teamsUpdated` |
-| Clock tick (1s) / clock changed / state changed / temp state changed | `match:clockTick`, `match:clockChanged`, `match:stateChanged`, `match:tempStateChanged` |
-| Event log updates | `events:added`, `events:cleared` |
-| Replay playback started / tick / stopped / clip created | `replay:started`, `replay:tick`, `replay:stopped`, `replay:clipCreated` |
-| Graphics queue changed | `graphics:queueUpdated` |
-| Goal workflow started / step / completed / aborted | `workflow:started`, `workflow:step`, `workflow:completed`, `workflow:aborted` |
+| `obs` | Connect/disconnect, status, scenes, scene switching, OBS transitions. |
+| `match` | Match state; clock start/pause/toggle/reset; current/start time; timer and added-time modes; approval; period label. |
+| `score` | Get/add/subtract/set/reset score and update team branding. |
+| `events` | Read, record, and clear the event log. |
+| `replay` | Read capture status, trigger one source, or trigger all enabled sources. `air()` is a placeholder. |
+| `graphics` | Show/hide lower thirds and top messages, manage presets/queue, trigger goal/transition graphics, control scorebug visibility. |
+| `workflow` | Trigger a goal, continue from replay to LIVE, abort, and inspect workflow state. |
+| `system` | Emergency return to LIVE. |
+| `config` | Read/write configuration. |
 
-This is the *only* channel for state to travel back to the dashboard, so the main process
-remains the single source of truth.
+Main-process events are forwarded back to the renderer, including OBS status/scene/ping, score and team changes, clock ticks/changes, match-state changes, event-log changes, replay request status, graphics queue updates, and goal-workflow lifecycle/step events.
 
----
+## 6. OBS Integration
 
-## 6. ConfigManager (`electron/config.js`)
+`OBSClient` wraps `obs-websocket-js` and connects to `ws://<host>:<port>`. It loads the current scene and available scene list after connecting, listens for scene/stream/record notifications, and pings OBS with `GetVersion` every five seconds. `call()` rejects if disconnected. Connection failures are shown in the dashboard; optional retry uses the configured interval.
 
-- Loads `config/bos.json` on startup; if it is missing or corrupt, it falls back to a
-  sensible default configuration (GARNET/TOPAZ, LIVE/REPLAY/GRAPHICS scenes, 180s buffer…).
-- `get("dot.path")` — dotted access, e.g. `cfg.get("obs.port")`.
-- `set("dot.path", value)` — writes the value **and persists to disk** immediately, then
-  emits a `changed` event (so other subsystems can react).
-- `updateAll(newConfig)` — shallow-merges a whole config object (used by the Settings modal).
+- `ScenesController` enumerates scenes and switches to names from `scenes.*` with `SetCurrentProgramScene`.
+- `TransitionsController` lists and selects OBS-native transitions and sets their duration.
+- `SourcesController` includes helpers for setting/playing/stopping a Media Source, refreshing a Browser Source, and toggling scene-item visibility. Those media helpers are not part of the current Source Record replay capture workflow.
 
-Everything broadcast-critical — host/port/password, team names/colours, scene names, replay
-durations, transitions, hotkeys, goal workflow toggles — lives in this file, **not** in code.
----
+A failed scene switch returns `false` and is surfaced to the goal workflow. OBS scene names must match the configured names exactly.
 
-## 7. OBS Controller Layer (`electron/obs/`)
+## 7. Match Clock, Periods, and Added Time
 
-### 7.1 OBSClient (`client.js`) — the WebSocket gateway
+`MatchEngine` is an `EventEmitter` with official match states (`PRE_MATCH`, `LIVE`, `HALF_TIME`, `LIVE_SECOND_HALF`, `FULL_TIME`, `BREAK`, `DELAYED`, `UNDER_REVIEW`) and temporary states (`NONE`, `GOAL`, `REPLAY`, `SLOW_MOTION`, `GRAPHIC_ACTIVE`). `canStartSequence()` prevents a second automated goal workflow from starting while another sequence is active unless `force` is passed.
 
-Wraps `obs-websocket-js` (protocol v5). Responsibilities:
+The one-second clock supports:
 
-- **Connect / authenticate** — connects to `ws://<host>:<port>` (default `localhost:4455`)
-  with the configured password (if any).
-- **Auto-reconnect** — on `ConnectionClosed` it schedules a retry (default every 3 s,
-  `obs.reconnectIntervalMs`). A `reconnectTimer` guard prevents overlapping retries.
-- **Liveness ping** — every 5 s it calls `GetVersion` and measures round-trip latency for
-  the `ms` readout in the dashboard header.
-- **Scene/stream/record awareness** — listens to OBS notifications
-  (`CurrentProgramSceneChanged`, `StreamStateChanged`, `RecordStateChanged`) and re-emits
-  them as BOS events, which `handlers.js` forwards to the dashboard.
-- **Replay buffer awareness** — subscribes to `ReplayBufferStateChanged` (active/saving
-  status shown in the Replay panel) and `ReplayBufferSaved` (the exact `savedReplayPath` of
-  each saved clip), so the capture engine (§11.3a) knows precisely where OBS wrote the file.
-- **Simulator mode** (`enableMockMode`) — if OBS can't be reached, BOS sets `isMockMode`.
-  Every `call(...)` is then answered by `_mockCall(...)` (current scene, scene list, stream
-  and record status), so scenes and media actions work without OBS running (see §9.4).
+- Stopwatch: counts up until `regulationMinutes`.
+- Countdown: counts down to zero.
+- Editable period label: arbitrary text is accepted and saved, such as `Q1`, `Set 1`, or `First Half`.
+- Editable starting clock: renderer accepts `MM:SS`; `setStartTime(seconds)` updates the displayed value and the saved reset/start value.
+- Reset, set, start, pause, and toggle controls.
 
-The `call(requestType, requestData)` method is the single choke point: in mock mode it
-returns canned responses, in real mode it delegates to OBS.
+When added minutes are selected, added time begins at regulation according to `match.additionalTimeMode`:
 
-### 7.2 ScenesController (`scenes.js`)
+- `automatic`: starts immediately.
+- `approval`: freezes the main clock at regulation and displays a GO AHEAD button. Regular start/space cannot bypass approval. Approval starts the separate added-time counter at `00:00`.
 
-- `switchScene(name)` → `SetCurrentProgramScene`.
-- `switchToLive()` / `switchToReplay()` / `switchToGraphics()` read the scene names from
-  config (`scenes.liveScene` etc.) — BOS never hard-codes scene names.
-- `getScenes()` / `getCurrentScene()` for the dashboard's scene monitor.
+The added-time counter increments to the selected number of minutes and then stops. The previous automatic “N MINUTES ADDED ON” top banner is no longer generated. The scorebug continues to receive clock state through `CLOCK_UPDATE`.
 
-### 7.3 SourcesController (`sources.js`)
+## 8. Scores, Teams, and Events
 
-- `setMediaSourceFile(file, loop)` — loads a replay clip into the OBS Media Source
-  (`SetInputSettings` with `local_file`, `restart_on_activate`).
-- `playMedia()` / `stopMedia()` — `TriggerMediaInputAction` RESTART / STOP.
-- `refreshBrowserSource(name)` — `PressInputPropertiesButton` → `refreshnocache`.
-- `setSourceVisible(scene, itemId, visible)` — `SetSceneItemEnabled`.
+`ScoreManager` owns home and away team records. Each record includes name, short name, primary/secondary colors, goal hotkey, score, and logo. Score changes clamp at zero, emit `scoreChanged`, persist the team objects, and cause a scorebug update. Team changes emit `teamsUpdated`, so updated names and colors are broadcast to graphics.
 
-The media source name is configurable (`scenes.replayMediaSource`, default `"Replay Video"`).
+The Match Controls scoring selector chooses 1, 2, or 3 points. It applies to goal buttons and manual plus/minus adjustments. Automated goal options carry the selected points, and the `GOAL` event records that point value.
 
-### 7.4 TransitionsController (`transitions.js`)
+Team colors drive the operator goal buttons, team labels, goal animation, transition accent, and scorebug color bars. The Teams & Branding settings expose editable names, short names, colors, and goal keys. Palette presets assign G to Garnet, E to Emerald, and T to Topaz. A team with a custom name can use its own key; team hotkeys are stored as keyboard `code` strings (such as `KeyX` or `F1`). The operator UI displays the currently assigned key.
 
-- `getTransitions()` → `GetSceneTransitionList`.
-- `getCurrentTransition()` → name + duration.
-- `setTransition(name)` → `SetCurrentSceneTransition`, persisted to config.
-- `setDuration(ms)` → `SetCurrentSceneTransitionDuration`, persisted to config.
+`EventLogger` stores up to 200 events in memory with an ID, timestamp, ISO time, display time, type, and event details. It is not a durable event database.
 
-These drive OBS' scene-to-scene transitions (Cut / Fade / Swipe / Stinger). Custom
-*graphical* transitions are a separate graphics-layer feature (§13.5).
+## 9. Automated Goal Workflow
 
----
+`GoalWorkflowManager.triggerGoal(team, options)` coordinates this sequence:
 
-## 8. Match Engine Layer (`electron/match/`)
+1. Resolve the home/away team and selected points; check the sequence conflict guard.
+2. Set temporary match state to `GOAL` and record a `GOAL` event with the clock, team, player, and points.
+3. Increment the selected team’s score and request a score flip animation.
+4. Optionally show the goal animation and wait `goalAnimationDuration`.
+5. If enabled, trigger Source Record capture. With no `goalWorkflow.replaySourceId`, all enabled camera sources are triggered sequentially; with an ID, only that source is triggered.
+6. Wait the configured celebration duration.
+7. Trigger the custom REPLAY wipe, switch to the configured REPLAY scene when covered, and wait until the operator presses **GO AHEAD → LIVE**.
+8. Trigger the LIVE wipe, switch to the configured LIVE scene, clear temporary state, and complete the workflow.
 
-### 8.1 MatchEngine (`engine.js`) — state machine + clock
+The workflow does not load or play the saved camera files. The REPLAY scene must already be composed in OBS as desired. The GO AHEAD control is required after entering REPLAY. The RETURN TO LIVE/emergency abort bypasses the approval wait and switches to LIVE directly.
 
-- **Official states** (`MatchEngine.States`): `PRE_MATCH`, `LIVE`, `HALF_TIME`,
-  `LIVE_SECOND_HALF`, `FULL_TIME`, `BREAK`, `DELAYED`, `UNDER_REVIEW`.
-- **Temporary states** (`MatchEngine.TemporaryStates`): `NONE`, `GOAL`, `REPLAY`,
-  `SLOW_MOTION`, `GRAPHIC_ACTIVE`. A temporary state also records *which sequence* is active
-  (`isSequenceRunning` + `activeSequenceName`).
-- `canStartSequence(name, force=false)` — the **conflict guard**: if a sequence is already
-  running, a new automated sequence is refused *unless the operator passes `force`*
-  (explicit override). This is what stops a replay sequence being interrupted accidentally.
-- **Match clock** — a 1 s interval ticks while running. Supports start / pause / toggle /
-  reset / direct set. Period presets (`1st Half` → 0:00, `2nd Half` → 45:00,
-  `Extra Time` → 90:00) and stoppage-time minutes (`+N` shown next to the clock).
-  Every tick is broadcast to the graphics (so the on-air scorebug clock runs live) and to
-  the dashboard.
-- `getFullState()` returns match state + temp state + clock + score in one object.
+The custom transition Browser Source sends `TRANSITION_COVERED` at about 500 ms and `TRANSITION_FINISHED` at about 1100 ms. The workflow matches those events by transition ID and also uses timeouts so it does not wait forever if the Browser Source is disconnected. The transition source must be active in both LIVE and REPLAY (or be in a shared scene) to receive the trigger across scene changes.
 
-### 8.2 ScoreManager (`score.js`)
+## 10. Replay Capture: Source Record
 
-- Holds `home` / `away` team objects (name, short, colours, logo, score), seeded from config.
-- `addHome/subtractHome/addAway/subtractAway` clamp at ≥ 0 and emit `scoreChanged` with
-  before/after values.
-- `setScore`, `resetScore`, `updateTeams` for bulk changes / team rebranding.
-- **Important:** scores *persist to `config/bos.json`* on every change (`_persist`), so a
-  restart does not lose the match state.
+`ReplayEngine` is a request service, not a video engine. It sends OBS WebSocket `TriggerHotkeyByName` with both `hotkeyName` and `contextName`. The default pair is `ReplayBuffer.Save` and the configured Source Record context. OBS accepting the request does not confirm that a file has finished writing.
 
-### 8.3 EventLogger (`events.js`)
+Each `replay.captureSources` row has an ID, display name, enabled flag, and optional hotkey/context overrides. Empty overrides inherit the shared replay hotkey/context. Settings can add/remove camera rows, enable/disable each row, and edit the overrides.
 
-- `recordEvent(type, details)` — appends a stamped event (`id`, `isoTime`, `displayTime`,
-  type, details) to the top of an in-memory list (capped at 200).
-- The goal workflow logs `GOAL` events (team + match clock + timestamp); the clock engine
-  logs `CLOCK_START/PAUSE/RESET`, period changes and match-state changes.
-- The dashboard renders these as a scrolling event feed.
+- **SAVE ALL REPLAYS** triggers each enabled source in order, one request at a time.
+- Each enabled source also has an individual SAVE button in the Replay panel.
+- Goal capture follows the same all-enabled behavior unless `goalWorkflow.replaySourceId` selects one camera.
+- If there are no enabled source rows, SAVE ALL falls back to the shared default hotkey.
 
----
+Replay request state is `IDLE`, `TRIGGERING`, `TRIGGERED`, or `ERROR`. The UI briefly shows the result, returns to READY, and keeps the last-triggered timestamp. Capture status reflects request acceptance, not confirmed media-file creation.
 
-## 9. Graphics Engine & Message Protocol (`electron/graphics/`)
+`airReplay()` currently returns a not-implemented result. BOS does not locate, adopt, trim, or play the files saved by Source Record. `scenes.replayMediaSource` and the OBS media helpers are prepared for future airing integration but are not connected to this capture path.
 
-The graphics engine (`engine.js`) is a small **HTTP + WebSocket server** that serves the OBS
-Browser Sources and pushes live state to them. It binds port `8088` (`graphics.httpPort`).
+## 11. Graphics Server and Browser Sources
 
-### 9.1 Static HTTP server
+`GraphicsEngine` starts an HTTP static server and WebSocket server on `graphics.httpPort` (default `8088`). Directory URLs resolve to `index.html`. Browser Sources connect to `ws://<host>:8088/ws`, receive `INITIAL_SYNC`, and reconnect after a dropped socket. The initial snapshot includes score/clock, lower-third state, top-message state, replay-overlay state, and scorebug visibility.
 
-- Serves the project root, so Browser Sources load from URLs like
-  `http://localhost:8088/graphics/score/` (a directory request auto-resolves to `index.html`).
-- Correct MIME types for HTML/CSS/JS/JSON/images/SVG/MP3/MP4, and `Access-Control-Allow-Origin: *`.
-- The root `/` page lists the available Browser Source URLs (handy for adding them in OBS).
+### Browser Source URLs
 
-### 9.2 WebSocket server & state sync
-
-- Hosted on the same port at path `/ws` via the `ws` package.
-- Every Browser Source opens one WebSocket when its page loads and **reconnects every 2 s**
-  if the connection drops (that is how graphics self-heal after a BOS restart).
-- On connect, BOS sends an `INITIAL_SYNC` snapshot (current score/clock, lower-third state,
-  replay-overlay state) so a reconnecting graphic immediately shows the *current* on-air look.
-
-### 9.3 BOS → graphics messages
-
-| Type | Payload | Consumed by |
+| Graphic | URL path | Runtime behavior |
 | :--- | :--- | :--- |
-| `INITIAL_SYNC` | `{score, lowerThird, replayOverlay}` | all |
-| `SCORE_UPDATE` | `{home, away, clock, animation: pop\|flip\|flash\|update, changedTeam, timestamp}` | score bug |
-| `CLOCK_UPDATE` | `{clock}` | score bug |
-| `LOWER_THIRD_SHOW` | `{title, subtitle, duration, position, animation, style, timestamp}` | lower-third |
-| `LOWER_THIRD_HIDE` | `{timestamp}` | lower-third |
-| `GOAL_ANIMATION` | `{team:{name,short,color,secondaryColor,score}, player, assist, duration, timestamp}` | goal |
-| `REPLAY_OVERLAY_SHOW` | `{title, speed, team, duration}` | replay |
-| `REPLAY_OVERLAY_HIDE` | — | replay |
-| `TRIGGER_TRANSITION` | `{id, title}` | transitions |
+| Scorebug | `/graphics/score/` | Team labels/colors/scores, match clock and period, added-time counter, score animations, fade visibility. |
+| Goal | `/graphics/goal/` | Team-colored goal animation, optional player/assist text, synthesized goal horn, timed hide. |
+| Lower third | `/graphics/lower-third/` | Standard notice appearance, configurable position/accent color, auto-dismiss. |
+| Top message | `/graphics/top-message/` | Optional top-position banner used through the top-message API; no longer selected by the standard message form. |
+| Replay overlay | `/graphics/replay/` | Replay title/speed/progress display when replay overlay messages are sent. |
+| Transition | `/graphics/transitions/` | Custom sliding wipe with title and optional team colors. |
 
-The score bug is updated automatically: `ScoreManager` fires `scoreChanged`,
-`engine.js` turns it into a single `SCORE_UPDATE` (using the animation type requested by the
-workflow, e.g. `flip` for goals, `pop` for manual buttons), and the clock ticks are streamed
-as `CLOCK_UPDATE` every second.
+### WebSocket messages
 
-### 9.4 Simulator mode (OBS-less operation)
+| Message | Direction | Purpose |
+| :--- | :--- | :--- |
+| `INITIAL_SYNC` | BOS → graphic | Initial score/clock and persistent graphic state. |
+| `SCORE_UPDATE` | BOS → scorebug | Team scores/branding and animation type. |
+| `CLOCK_UPDATE` | BOS → scorebug | Current clock/period/additional-time state. |
+| `SCOREBUG_VISIBILITY` | BOS → scorebug | Fade the scorebug in/out. Visibility resets to visible on BOS restart. |
+| `GOAL_ANIMATION` | BOS → goal | Team, score, player/assist, animation duration. |
+| `LOWER_THIRD_SHOW` / `LOWER_THIRD_HIDE` | BOS → lower third | Show/dismiss current lower third. |
+| `TOP_MESSAGE_SHOW` / `TOP_MESSAGE_HIDE` | BOS → top message | Show/dismiss top-message banner through API. |
+| `REPLAY_OVERLAY_SHOW` / `REPLAY_OVERLAY_HIDE` | BOS → replay | Replay overlay state. Replay capture itself does not currently play/emit a clip overlay. |
+| `TRIGGER_TRANSITION` | BOS → transition | Start a custom wipe with ID/title/colors. |
+| `TRANSITION_COVERED` / `TRANSITION_FINISHED` | transition → BOS | Report coverage and completion points to the goal workflow. |
 
-When OBS Studio is unavailable, `OBSClient.enableMockMode()` makes every OBS call return
-canned data (`GetCurrentProgramScene`, `SetCurrentProgramScene`, `GetSceneList`, stream and
-record status). The graphics server and all sequences still work, so BOS remains fully
-operable for rehearsal, development and testing. The dashboard labels this state
-`OBS ● SIMULATOR (READY)`; auto-reconnect keeps probing for real OBS in the background.
+Scorebug visibility is currently in-memory only and returns to visible at startup. It can be toggled from Match Controls. The standard broadcast message form always shows a lower third; its position selector chooses left, center, or right. The separate top-message API and Browser Source remain available.
 
-### 9.5 Graphics → BOS messages
+## 12. Renderer Controls and Keyboard Shortcuts
 
-Browser Sources can signal BOS over the same socket; the engine re-emits them:
+The dashboard has three main work areas:
 
-| Type | Meaning |
+- **Match Controls:** official match state, custom period label, regulation duration, starting clock, timer mode, added-time mode/minutes, scoring value, team goal buttons, +/- controls, scorebug visibility, event log.
+- **Broadcast Message:** standard-style lower-third title/subtitle/highlight, duration, position, accent color, presets, active graphic status, and a queue.
+- **Replay Capture:** shared SAVE ALL action, per-enabled-camera buttons, request state, and last-triggered time.
+
+Settings tabs include OBS/scenes/Source Record camera trigger list, Teams & Branding, Goal Automation, and the hotkey reference. Team palette buttons apply colors/names and their standard G/E/T bind. Any team goal key can be edited in Teams & Branding.
+
+Current default keyboard actions:
+
+| Key | Action |
 | :--- | :--- |
-| `TRANSITION_COVERED` | The custom transition graphic has fully covered the screen — safe to switch OBS content underneath |
-| `TRANSITION_FINISHED` | The transition animation has completed and hidden itself |
+| Team-configured key | Trigger that team’s goal workflow (Garnet G, Emerald E, Topaz T by default). |
+| `R` | Trigger SAVE ALL REPLAYS. |
+| `L` | Emergency abort and direct return to LIVE. |
+| `U` | Show UNDER REVIEW lower third. |
+| `H` | Hide lower third. |
+| `Space` | Start/pause the match clock, except while added-time approval is pending. |
 
-These are the coordination hooks the Addendum (§22–23) calls for. (In v1.0 the replay engine
-currently uses a fixed 500 ms wait instead of consuming `COVERED`; see §21.)
+Team goal hotkeys come from the team objects. The other shortcuts above are currently registered in `renderer/js/app.js`; the legacy `hotkeys` configuration block is not used to dynamically rebind them. Key shortcuts are ignored while an input, textarea, or select has focus.
 
----
+## 13. OBS Setup
 
-## 10. The Five Browser Source Graphics (`graphics/`)
+1. Enable OBS WebSocket v5 in OBS (default port `4455`) and enter the connection settings in BOS.
+2. Create the configured LIVE and REPLAY scenes (default names `LIVE` and `REPLAY`).
+3. Add Browser Sources for the needed graphics using `http://localhost:8088/graphics/<name>/`, normally at 1920×1080 with transparent background.
+4. Include the same transition Browser Source in both LIVE and REPLAY, or place it in a shared scene included in both. This keeps it active across scene switches.
+5. Configure Source Record’s replay buffer and hotkeys in OBS. Copy each hotkey name/context into the shared defaults or the matching camera row in BOS Settings.
+6. If using multiple camera buffers, add and enable one capture-source row per camera. SAVE ALL and goal capture then issue one OBS request for each enabled row.
 
-Each graphic is a self-contained mini web-app that connects to `/ws`, listens for messages,
-and animates itself with HTML/CSS. BOS only supplies data; the graphic owns its look.
+OBS still owns program composition, camera selection, Source Record buffering, and file output. BOS’s REPLAY scene switch alone does not guarantee that a saved replay file is being played.
 
-| Browser Source | URL | What it does |
-| :--- | :--- | :--- |
-| **score** | `…/graphics/score/` | Score bug: team names/shorthands, colour bars, running clock + period, animated score numerals (`pop` / `flip` CSS animations) |
-| **lower-third** | `…/graphics/lower-third/` | Lower third + F1-style banner: title/subtitle, status badge ("OFFICIAL NOTICE"), position (`bottom-left`…), style classes (`standard`, `alert`, `f1-banner`), slide-in via CSS |
-| **goal** | `…/graphics/goal/` | Full-screen celebration: team name, "GOAL!", team-color glow, light rays, player/assist text, updated score — plus a **Web-Audio horn** (no audio file needed). Auto-hides after the configured duration |
-| **replay** | `…/graphics/replay/` | Persistent replay indicator: REPLAY badge, speed (`1×`, `½×`), clip title, live progress bar |
-| **transitions** | `…/graphics/transitions/` | Custom stinger: two sliding panels (vertical wipe) + center badge (logo mark, title strip). Plays ~1.1 s, sends `TRANSITION_COVERED` at 500 ms and `TRANSITION_FINISHED` at 1100 ms |
+## 14. Graphics Packages
 
-The graphics are deliberately *dumb*: they hold no match data and simply obey the messages
-from BOS, which keeps BOS as the single source of truth.
+`electron/graphics/packages.js` contains package listing and path-resolution helpers, and `packages/ssl_media_2026/` is an example package. The active HTTP server still serves built-in files from `graphics/`; package switching is not wired end-to-end.
 
----
+## 15. Running and Testing
 
-## 11. Replay Engine Layer (`electron/replay/`)
-
-### 11.1 Recorder (`recorder.js`) — the rolling buffer (synthetic mode)
-
-- Spawns a single **FFmpeg** process at startup (`startRecording`) that continuously writes
-  2-second segments of a synthetic feed (`testsrc2` with a burnt-in clock).
-- Segments are written to `replay_cache/segments/` with a `segment_wrap` history sized to the
-  configured buffer (default 180 s) — OLD segments are overwritten in place.
-- **Input pacing is deliberately off (`-re` is not used).** On recent FFmpeg builds,
-  `-re` / `-readrate` prevent the segment muxer from rolling segments (only one file is ever
-  produced); live devices/URLs pace themselves anyway, and the synthetic pattern encodes fast.
-- **This FFmpeg recorder only runs in `captureSource: "synthetic"` mode.** In the default
-  `"obs"` mode (§11.3a) the rolling buffer lives inside OBS itself; multi-camera FFmpeg
-  rolling buffers are owned by `CameraManager` (§11.3c).
-
-### 11.2 Buffer model (`buffer.js`)
-
-- Tracks a time window of `bufferSeconds` (config: 60 / 90 / 120 / 180 / 300).
-- `calculateClipWindow(eventTime, preRoll, postRoll)` computes the exact extraction window:
-  `start = event − preRoll`, `end = event + postRoll`, `duration = pre + post`
-  (defaults 8 s before / 7 s after a goal, both configurable).
-- `setBufferDuration(seconds)` lets the operator shrink/extend the buffer live (min 30 s).
-
-### 11.3 Clip generation & adoption (`clips.js` + `obsCapture.js`)
-
-Clips enter the library one of two ways:
-
-**a) OBS Replay Buffer capture (default — `captureSource: "obs"`).**
-`ObsReplayBufferCapture` (`obsCapture.js`) captures the **real program output** straight
-from OBS over the WebSocket:
-1. `ensurePrepared()` finds the OBS `replay_buffer` output, best-effort points its save
-   path at `replay.obsReplayBuffer.savePath` (`replay_cache/obs/`) and sets the buffer
-   length (`max_time`/`max_replay`), then `StartReplayBuffer` if it isn't running.
-2. `captureClip()` calls `SaveReplayBuffer` — **OBS auto-saves the current buffer to the
-   set path** — then waits for the file. The exact path is learned 3 ways (in order):
-   the `ReplayBufferSaved` WebSocket event (`savedReplayPath`), the
-   `GetLastReplayBufferReplay` request, and a watch on the save directory.
-3. `clips.trimLastSeconds()` trims the saved buffer to the configured pre/post-roll window
-   (fast `-sseof` + `-c copy`, no re-encode; disabled with `trimToWindow: false`).
-4. `clips.adoptFile()` moves it into the clip library as `replay-001-<type>.mp4/.mkv` and
-   returns a clipInfo descriptor (`{id: "replay-001", title, type, team, duration, filePath, …}`).
-
-**b) Synthetic fallback (`captureSource: "synthetic"`, simulator mode, or any OBS failure).**
-`generateClip(options)` synthesises a broadcast-ready clip with FFmpeg: 1920×1080 @ 30 fps
-labelled with `● REPLAY BUFFER — <TEAM> <TYPE>`, a live timecode and a BOS footer, plus a
-440 Hz tone bed (AAC), written straight to `replay_cache/clips/`.
-
-`listClips()` / `deleteClip()` fill the dashboard's "clips shelf" (`.mp4` and `.mkv` are
-both supported, since OBS replay buffers commonly save `.mkv`).
-
-**Clip metadata index.** Every clip also stores its **real metadata** — title, team, type,
-camera view, camera id and exact duration — in a sidecar `replay_cache/clips/index.json`.
-`listClips()` merges the index back into each listing, so the dashboard shows real durations
-(no more hard-coded 8 s countdowns that cut replays short) and 📷 camera tags.
-
-**c) Multi-camera capture (per camera view).** `CameraManager` (`cameras.js`) runs one
-independent FFmpeg rolling buffer per entry in `replay.captureSources` (type `ffmpeg`):
-each camera's segments live in `replay_cache/cameras/<id>/segments`, and at capture time
-`assembleClipFromSegments()` concats the newest stable segments (re-encoded so boundaries are
-safe), trims them to the pre/post-roll window, and `adoptFile()` moves a per-camera clip into
-the shared library (`replay-004-cam1-goal.mp4`, tagged with the camera). The adopted
-duration is capped to footage actually available, so a fresh camera never yields an
-over-long clip. `input: "synthetic"` gives a labelled test pattern; anything else is passed
-straight to FFmpeg (`rtsp://…`, `v4l2:/dev/video0`, `dshow://…`).
-
-### 11.4 Slow motion (`slowmotion.js`)
-
-- `processSlowMotion(input, speed)` runs FFmpeg with `setpts=<1/speed>*PTS` (video) and
-  chained `atempo` (audio: `atempo=0.5` for ½×, `atempo=0.5,atempo=0.5` for ¼×), so the slow-mo
-  is a real processed file — exactly what the spec means by "FFmpeg processing rather than
-  asking OBS to play a video slower". Outputs are cached (`_slow_05x.mp4` / `_slow_025x.mp4`)
-  and it falls back to the original file if FFmpeg fails.
-
-### 11.5 ReplayEngine (`engine.js`) — the coordinator
-
-`createReplayClip(options)` **routes capture**: in `"obs"` mode (and OBS connected) it
-delegates to `obsCapture.captureClip`; if that fails — or in simulator/synthetic mode — it
-falls back to `clips.generateClip`, so a replay is always produced. Then it calls
-`cameras.captureAll(options)` to pull a clip from **every configured camera source** at the
-same moment, emitting a `clipCreated` event per extra camera clip.
-
-`playReplay(clip, speed, autoReturnLive=true)` executes the on-air sequence:
-
-1. Sets temp state `REPLAY` (or `SLOW_MOTION` for speed < 1) on the match engine.
-2. If slow-mo, processes the file first (actual duration becomes `duration / speed`).
-3. Fires the custom **"REPLAY" transition** graphic, waits for screen coverage.
-4. Shows the **replay overlay** graphic (title + speed badge + camera view when present).
-5. `setMediaSourceFile` → loads the clip into the OBS Media Source.
-6. `switchToReplay()` → the REPLAY scene goes to program.
-7. `playMedia()` → the clip starts.
-8. A 1-second countdown timer (initialised from the full clip duration) drives the
-   "REMAINING" readout and, at zero, calls `stopReplay()` (if `autoReturnLive`).
-9. `stopReplay()` reverses it: custom "LIVE" transition → stop media → hide overlay →
-   switch back to the LIVE scene → reset temp state to `NONE`.
-
-`getStatus()` reports playback state, capture source (`captureSource`), OBS replay-buffer
-status (`obsReplayBuffer`), per-camera recorder status (`cameras`), a `lastMediaNote`
-diagnostic (file + which OBS step succeeded/failed), buffer window, recorder status and all
-saved clips.
-
-### 11.6 Clip sequence manager (`sequence.js`) — cycling through clips
-
-`ClipSequenceManager` is an operator-arranged **on-air playlist** built from the saved clip
-library:
-
-- **Editing** — `add(entry)` appends a clip (a duplicate just points the cursor at it),
-  `move(from, to)` reorders, `setSpeed(i, speed)` sets per-clip playback speed (1× / ½× / ¼×),
-  `removeAt(i)` / `clear()` prune. The whole order + flags persist to `config/bos.json`
-  (`replay.sequence`, `replay.sequenceLoop`, `replay.sequenceAutoAdvance`), so the sequence
-  survives restarts; entries pointing at deleted files are pruned automatically
-  (`_pruneMissing` / `pruneFile`, the latter wired into `replay:deleteClip`).
-- **Cycling** — `playNext()` / `playPrevious()` move a cursor through the list with
-  wrap-around (LOOP), and `playIndex(i)` jumps straight to a clip. The Replay panel shows a
-  **CLIP SEQUENCE CYCLER** strip (PREV / position / PLAY NEXT + clickable chips), hotkeys
-  `[` / `]`, and the Settings → **Clip Sequence** tab provides the full editor.
-- **AUTO-NEXT** — when a sequence clip finishes *naturally* (the ReplayEngine emits the new
-  `playbackCompleted` event — never on manual STOP or emergency abort), the manager
-  automatically plays the following clip. A playback-*generation* counter in the replay
-  engine prevents the old clip's auto-return-to-LIVE from clobbering the next clip's start.
-
----
-
-## 12. The Automated Goal Workflow (`electron/match/goalWorkflow.js`)
-
-Pressing **GARNET GOAL** / **TOPAZ GOAL** (button or hotkey) calls `triggerGoal(teamKey, opts)`.
-This is the heart of the system — it turns one press into the full broadcast sequence.
-Concurrently with the animation, the replay clip is already being prepared (spec §25).
-
-```text
-  button / hotkey 'G' or 'T'
-        │
-        ▼
- 1. canStartSequence? ── no? refused (conflict guard) ──┐
-        │ yes                                          │
-        ▼ (temp state → GOAL)                           ▼ force=true overrides
- 2. Record GOAL event (team, match clock, timestamp)    │
- 3. Queue 'flip' score animation → score +1             │
- 4. ▶ start replay-clip generation IN THE BACKGROUND    │
- 5. Goal animation graphic (team name, score, player)   │  (config: showGoalAnimation)
- 6. Celebration hold (default 3.0 s)                    │  (celebrationDurationSeconds)
- 7. Await background clip (so nothing waits needlessly) │
- 8. Replay 1×  ──► transition → REPLAY scene → play     │  (playReplay1x)
- 9. Replay ½×  ──► FFmpeg slow-mo pass, play again      │  (playSlowMo05x)
-10. Return to LIVE ──► transition back, temp state NONE │
-        ▼
-   workflow completed
-```
-
-Details that matter:
-
-- **Cancellation/abort** — `abort()` (the RETURN-TO-LIVE button, `L` hotkey, or the sequence
-  bar) stops any replay, switches back to LIVE, and clears the temp state. The delay loops
-  check `isAborted` every 50 ms, so the sequence responds almost instantly.
-- **Overrides** — a second automated goal during a running sequence is refused unless the
-  operator passes `force` (deliberate override, per spec §8).
-- **Configurable** — every phase (animation on/off, celebration length, 1× / ½× on/off,
-  auto-return) comes from `goalWorkflow.*` in `config/bos.json`, so the default flow can be
-  re-shaped without touching code.
-- **Event trail** — each goal is recorded in the event log with the match clock time, which
-  the pre/post-roll replay window is built around.
-
----
-
-## 13. Broadcast Sequences & Transitions
-
-BOS orchestrates two transition *worlds*:
-
-- **OBS transitions** (`transitions.js`) — Cut/Fade/Swipe/Stinger between scenes. Plain and
-  reliable, used for scene changes.
-- **Custom graphical transitions** (`graphics/transitions/`) — full-screen HTML/CSS/JS
-  animations (sliding panels, logo, team colours) that *cover* the transition moment so the
-  underlying OBS change is hidden. §13.5 describes the lifecycle.
-
-### 13.1 Goal sequence
-LIVE → goal animation + celebration → custom transition → REPLAY (1×, then ½× slow-mo) →
-custom transition → LIVE. (Full detail in §12.)
-
-### 13.2 Manual replay
-Operator sets pre-roll / post-roll / speed (default 8 s / 7 s / 1×) in the Replay panel and
-hits **CREATE REPLAY**. BOS generates the clip, then plays it to air via the same replay
-path as §11.5 — including a manual IN/OUT selection on the timeline scrubber to adjust the
-window before generating.
-
-### 13.3 Lower thirds & status banners
-`graphics:showLowerThird({title, subtitle, duration, position, style, animation})` shows a
-lower third or F1-style banner over the live pictures. Presets ship for UNDER REVIEW,
-GOAL CHECK, DECISION CONFIRMED, NO GOAL, MATCH DELAYED, MATCH RESUMING SHORTLY, TECHNICAL
-DIFFICULTY and HALF TIME — but the operator can type anything (§20 spec). A duration (default
-5 s) auto-hides it, and the **graphics queue** (`messages.js`) chains items: the next queued
-message appears 500 ms after the current one hides.
-
-### 13.4 Replay overlay
-While a replay plays, the persistent REPLAY badge + speed + progress bar is shown by the
-replay graphic (`graphics/replay/`), driven by `REPLAY_OVERLAY_SHOW/HIDE`.
-
-### 13.5 Custom transition lifecycle (Addendum §7–9, §22–23)
-The graphical transition implements a `start → covered → finished` handshake:
-
-```text
-BOS                          TRANSITION GRAPHIC
- │ transition.start()  ─────►  wipe panels slide in
- │                              │ 500 ms (full coverage)
- │  waits for coverage  ◄─────── TRANSITION_COVERED   ──► safe to switch OBS scene here
- │  switches OBS scene   ──►  OBS SetCurrentProgramScene
- │  starts replay / next    │ 1100 ms (wipe done)
- │  state                    └──► TRANSITION_FINISHED → panels hidden
-```
-
-Each transition gets a unique `id` so events can be matched. In v1.0 the engine fires the
-transition and waits a fixed 500 ms before switching scenes (deliberate simplification —
-the `COVERED/FINISHED` events are emitted by the graphic and received by the engine but not
-yet awaited; see §21).
-
----
-
-## 14. Broadcast Packages (`electron/graphics/packages.js` + `packages/`)
-
-The Addendum (§18–25) calls for *pluggable broadcast design packages* — a whole look
-(scoreboard, goal animation, lower thirds, transitions, fonts, colours) that can be swapped
-without touching BOS logic. This version provides:
-
-- `PackageManager` — lists packages (`listPackages()`, with `default` = built-in `graphics/`),
-  stores the active choice in config (`graphics.activePackage`), and resolves graphic files
-  against the selected package first, falling back to the built-ins
-  (`resolveGraphicFile(graphicType, file)`).
-- `packages/ssl_media_2026/` — an example package carrying a manifest (display name, colours,
-  font, and per-graphic entry points).
-
-> **Status:** the manager is implemented, but the graphics HTTP server still serves directly
-> from the built-in `graphics/` folder, so package *switching* is not yet wired end-to-end.
-> Running BOS with custom packages is a planned enhancement (see §21).
-
----
-
-## 15. The Renderer Dashboard (`renderer/`)
-
-The dashboard is plain HTML/CSS/JS, loaded into the Electron window. It is organised as:
-
-| Area | Module | Contents |
-| :--- | :--- | :--- |
-| **Master header** | `app.js` | Program badge (PROGRAM: LIVE/GOAL/REPLAY), current scene pill, transition pill, match clock + period, **OBS ● CONNECTED / DISCONNECTED / SIMULATOR** + latency, RETURN-TO-LIVE emergency button, settings button |
-| **Match panel** | `match.js` | Dedicated GARNET/TOPAZ goal buttons, +/− score buttons, match state dropdown, period dropdown, stoppage-time buttons, reset clock, scrolling event feed |
-| **Replay panel** | `replay.js` | Buffer status (+ capture mode), OBS Replay Buffer status strip, **CLIP SEQUENCE CYCLER** (PREV/position/NEXT, chips with 📷 camera tags, LOOP/AUTO toggles), active replay card (name, speed, countdown, STOP), manual replay form (pre/post-roll, speed), timeline scrubber with IN/OUT selection, clips shelf (AIR 1×, AIR ½×, SEQ ＋, delete — showing real duration + camera tags) |
-| **Graphics panel** | `graphics.js` | Lower-third form (title / subtitle / duration / position / style), SHOW / HIDE, message presets, on-air countdown card, graphics queue with remove buttons |
-| **Settings modal** | `settings.js` | Tabs for OBS connection (+ capture source), scene names, team names/colours, goal-workflow toggles, **Clip Sequence** (add/reorder/remove clips, per-clip speed slow-mo, camera tags, loop & auto-advance) and (read-only) hotkey list; **SAVE** persists to `config/bos.json` |
-| **Sequence bar** | `app.js` | While a goal workflow runs: shows the team, the current step, and SKIP/ABORT |
-
-The UI never performs privileged work — every action is one `window.bosAPI.*` call, and every
-state change arrives back through the event listeners registered in `app.js` (see §5.2).
-
----
-
-## 16. Configuration Reference (`config/bos.json`)
-
-| Key | Purpose | Default |
-| :--- | :--- | :--- |
-| `obs.host` / `obs.port` / `obs.password` | OBS WebSocket endpoint (OBS v5 server, port 4455) | `localhost` / `4455` / *(blank)* |
-| `obs.autoReconnect` / `obs.reconnectIntervalMs` | Reconnection behaviour | `true` / `3000` |
-| `teams.home` / `teams.away` | Name, shorthand, colours, logo, **score** (persisted live) | GARNET / TOPAZ |
-| `scenes.liveScene` / `scenes.replayScene` / `scenes.graphicsScene` | Scene names BOS switches to | `LIVE` / `REPLAY` / `GRAPHICS` |
-| `scenes.replayMediaSource` | OBS Media Source that plays replay clips | `Replay Video` |
-| `replay.bufferSeconds` | Rolling buffer length (60–300 s) | `180` |
-| `replay.preRollSeconds` / `replay.postRollSeconds` | Goal replay window before/after the event | `8` / `7` |
-| `replay.defaultSpeed` / `replay.autoReplay` | Replay defaults | `1.0` / `true` |
-| `replay.fps` / `replay.resolution` | Synthetic recorder quality | `30` / `1920x1080` |
-| `replay.replayDirectory` | Where segments/clips are stored | `./replay_cache` |
-| `replay.captureSource` | Capture mode: `obs` (OBS Replay Buffer over WebSocket — real footage) or `synthetic` (FFmpeg test pattern) | `obs` |
-| `replay.obsReplayBuffer.savePath` | **Auto-save path** where OBS writes replay clips | `./replay_cache/obs` |
-| `replay.obsReplayBuffer.maxBufferSeconds` | How much footage OBS keeps buffered (`max_time`) | `180` |
-| `replay.obsReplayBuffer.maxReplays` | Number of replay files OBS keeps (`max_replay`) | `1` |
-| `replay.obsReplayBuffer.trimToWindow` | Trim each saved clip to the pre/post-roll window (`-sseof` copy trim) | `true` |
-| `replay.obsReplayBuffer.saveTimeoutMs` | Max wait for the saved clip file before falling back | `15000` |
-| `replay.sequence` | Ordered clip sequence (playlist) — entries hold `filePath`, `title`, `type`, `speed`… | `[]` |
-| `replay.sequenceLoop` | Wrap around when cycling past the end of the sequence | `true` |
-| `replay.sequenceAutoAdvance` | Auto-play the next clip when the current one finishes naturally | `false` |
-| `replay.captureSources` | Per-camera capture sources — `main` (type `obs`) + FFmpeg cameras (`{id, name, type, input, label, enabled}`); one rolling buffer + saved clip per camera view | `main` + cam1/cam2 examples |
-| `graphics.httpPort` / `graphics.wsPort` | Graphics server ports | `8088` |
-| `graphics.defaultLowerThirdDuration` / `graphics.animationStyle` | Lower-third defaults | `5` / `slide-in` |
-| `transitions.defaultTransition` / `transitions.durationMs` | OBS transition defaults | `Fade` / `300` |
-| `hotkeys.*` | Hotkey map (`KeyG`, `KeyT`, `KeyR`, `KeyL`, `KeyU`, `KeyH`, `Space`) | *(see §17)* |
-| `goalWorkflow.*` | Animation on/off, durations, 1×/½× replays, auto-return | *(see §12)* |
-
----
-
-## 17. Keyboard Shortcuts
-
-Registered in `renderer/js/app.js` (configurable in `config/bos.json → hotkeys`; the key
-bindings currently mirror the config defaults):
-
-| Action | Key | Notes |
-| :--- | :--- | :--- |
-| Garnet Goal | `G` | Runs the full automated goal sequence |
-| Topaz Goal | `T` | Runs the full automated goal sequence |
-| Quick Replay | `R` | Creates a manual replay with the current pre/post-roll values and plays it |
-| Return to Live (Emergency Abort) | `L` | Aborts workflow/replay, hides graphics, switches LIVE |
-| Under Review | `U` | Shows the UNDER REVIEW / DECISION PENDING lower third |
-| Hide Lower Third | `H` | Clears the active lower third |
-| Start / Pause Match Clock | `Space` | Toggles the official match clock |
-| Previous Clip in Sequence | `[` | `sequence.playPrevious()` — cycle back through the clips |
-| Next Clip in Sequence | `]` | `sequence.playNext()` — cycle forward through the clips |
-
-Hotkeys are ignored while the focus is inside an input/textarea/select, so typing in the
-message box never triggers a broadcast action.
-
----
-
-## 18. Recommended OBS Setup
-
-The scene architecture from the spec (§5) is exactly what BOS expects — just three scenes:
-
-```text
-LIVE scene                REPLAY scene
-├── Camera 1              ├── Replay Video      (Media Source named "Replay Video" —
-└── Browser Sources:      │                       this is scenes.replayMediaSource)
-    ├── Score Bug         └── Browser Sources:
-    ├── Lower Third           ├── Replay Watermark
-    ├── Goal Celebration      └── Transition Wipe
-    └── Transition Wipe
-```
-
-Add Browser Sources pointing at the graphics server (`http://localhost:8088`), each
-1920×1080 with a **transparent background** (chroma: transparent). Then enable OBS
-**Tools → WebSocket Server Settings** on port 4455. BOS connects automatically; without OBS
-running it uses Simulator mode (§9.4). Because BOS sends data over WebSocket, the Browser
-Sources stay in sync even after you restart OBS or BOS.
-
-For **OBS Replay Buffer capture** (§11.3a) also enable **Settings → Output → Replay Buffer →
-Enable Replay Buffer** in OBS. BOS starts it automatically on first use and saves clips to
-`replay.obsReplayBuffer.savePath`; the Replay panel shows the live buffer status.
-
----
-
-## 19. Safety & Concurrency Model
-
-The system is designed so a single mistaken click cannot wreck the broadcast:
-
-- **Renderer isolation** — the dashboard can only issue whitelisted IPC calls; it cannot
-  touch the filesystem, spawn processes, or connect to OBS directly.
-- **Sequence conflict guard** — `MatchEngine.canStartSequence()` refuses a second automated
-  sequence while one is active unless explicitly overridden (`force`).
-- **Emergency abort** — `system:emergencyAbort` (button or `L`) stops replay, aborts the
-  workflow, hides any lower third, and returns to LIVE in one call.
-- **Abort-aware delays** — every workflow wait polls `isAborted`, so abort is near-instant
-  (< 100 ms), even mid-celebration or mid-replay.
-- **Graceful degradation** — no OBS? Simulator mode. No FFmpeg? Slow-mo falls back to the
-  normal-speed file rather than failing the sequence. On quit, subprocesses and sockets are
-  torn down cleanly.
-
----
-
-## 20. Running & Testing
-
-| Command | What it does |
+| Command | Behavior |
 | :--- | :--- |
-| `npm start` | Launch BOS with the Electron window |
-| `npm run dev` | Launch with DevTools available |
-| `npm test` | `test.js` — instantiates every backend module (config → match → OBS (mock) → graphics server → replay recorder → goal workflow) and prints a validation summary |
+| `npm start` | Launch Electron. |
+| `npm run dev` | Launch Electron in development mode. |
+| `npm test` | Run `node test.js`, which instantiates backend modules and checks config, clock modes, start/period values, team keys, added-time approval, and multi-camera replay request payloads. |
 
-The smoke test spins up the graphics server on port 8088 and the FFmpeg rolling buffer, then
-tears everything down — a quick "does the whole backend wire up?" check. For full manual
-testing, launch BOS without OBS running: everything except actual OBS output is simulated,
-including the graphics server (open `http://localhost:8088/` in a browser to preview fonts,
-transitions and animations).
+The smoke test starts the GraphicsEngine on port `8088`. If another BOS instance already owns that port, the test server can fail to bind; close the other instance before running the full smoke test.
 
----
+## 16. Current Limitations
 
-## 21. Known Limitations & Next Steps
-
-These are the gaps between this implementation and the written spec, in priority order:
-
-1. **Broadcast packages not wired end-to-end** — `PackageManager` exists but the HTTP server
-   serves the built-in `graphics/` only; `packages/ssl_media_2026/` is manifest-only.
-   Wiring `resolveGraphicFile()` into the server would complete the "platform" story.
-2. **Hotkeys not truly editable** — the default map lives in config, but the renderer
-   hard-codes the key bindings and the Settings tab is read-only.
-3. **Timeline IN/OUT visual only** — the scrubber sets an in/out window visually, but manual
-   replay generation still uses the numeric pre/post-roll values.
-4. **Transition events not awaited** — the graphic emits `TRANSITION_COVERED/FINISHED`, but
-   the replay engine waits a fixed 500 ms instead of awaiting `COVERED`; timing would be
-   perfectly robust if it consumed those events.
-5. **Event-time input (spec §15)** — the manual replay form has no explicit wall-clock event
-   time field; replays are built around the current moment plus pre/post-roll.
-6. **Replay identifiers (partial)** — OBS-captured clips now get sequential
-   `replay-001` ids, but synthetic fallback clips still use `clip_<timestamp>`, and replay
-   graphics carry no camera-identifier field yet (multi-angle is reserved for the future).
+- Replay capture sends hotkey requests only. BOS does not verify Source Record completed a file write, nor does it provide replay clip playback or file management.
+- `ReplayEngine.airReplay()` is a placeholder.
+- The goal workflow switches to the configured REPLAY scene and waits for GO AHEAD; the operator/OBS scene must provide the intended replay picture.
+- OBS has no simulated fallback. Scene changes, transitions, and replay hotkey requests require an active OBS WebSocket connection.
+- Custom transition coordination relies on the transition Browser Source being connected; timeout fallbacks permit progress but cannot guarantee that a wipe was visible.
+- The `autoReturnLive` goal config field is retained but the current workflow uses explicit operator GO AHEAD after REPLAY.
+- Team goal binds are configurable per team. R/L/U/H/Space are currently fixed in the renderer rather than dynamically loaded from the legacy `hotkeys` block.
+- The top-message graphic/API remains available, but the standard broadcast-message form now controls lower thirds only.
+- Broadcast package path resolution exists but the HTTP server has not been wired to serve an active package.
 
 ---
 
-*End of implementation reference. See `spec.md` for the original requirements and `addon.md`
-for the graphics/animation requirements.*
+*This guide documents the current source implementation. `spec.md` and `addon.md` describe broader requirements and ideas that may not yet be implemented.*

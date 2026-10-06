@@ -12,21 +12,18 @@
       "short": "GAR",
       "color": "#e11d48",
       "secondaryColor": "#7f1d1d",
-      "score": 1,
+      "hotkey": "KeyG",
+      "score": 0,
       "logo": ""
     },
     "away": {
-      "name": "TOPAZ",
-      "short": "TOP",
-      "color": "#eab308",
-      "secondaryColor": "#713f12",
-      "score": 1,
+      "name": "EMERALD",
+      "short": "EME",
+      "color": "#10b981",
+      "secondaryColor": "#064e3b",
+      "hotkey": "KeyE",
+      "score": 0,
       "logo": ""
-    },
-    "houses": {
-      "garnet": { "name": "GARNET", "short": "GAR", "color": "#e11d48", "secondaryColor": "#7f1d1d" },
-      "emerald": { "name": "EMERALD", "short": "EME", "color": "#10b981", "secondaryColor": "#064e3b" },
-      "topaz": { "name": "TOPAZ", "short": "TOP", "color": "#eab308", "secondaryColor": "#713f12" }
     }
   },
   "scenes": {
@@ -38,27 +35,27 @@
   "replay": {
     "enabled": true,
     "hotkeyName": "ReplayBuffer.Save",
-    "contextName": "Game Capture - Source Record",
+    "contextName": "test1 - Source Record",
     "captureSources": [
       {
         "id": "main",
         "name": "Main Program",
         "enabled": true,
-        "hotkeyName": "ReplayBuffer.Save",
+        "hotkeyName": "",
         "contextName": ""
       },
       {
         "id": "cam1",
         "name": "Camera 1",
         "enabled": false,
-        "hotkeyName": "ReplayBuffer.Save",
+        "hotkeyName": "",
         "contextName": ""
       },
       {
         "id": "cam2",
         "name": "Camera 2",
         "enabled": false,
-        "hotkeyName": "ReplayBuffer.Save",
+        "hotkeyName": "",
         "contextName": ""
       }
     ]
@@ -90,5 +87,9 @@
     "captureReplayOnGoal": true,
     "replaySourceId": "",
     "autoReturnLive": true
+  },
+  "match": {
+    "timerMode": "stopwatch",
+    "additionalTimeMode": "approval"
   }
 }
