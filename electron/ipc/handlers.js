@@ -31,6 +31,7 @@ function registerIpcHandlers({
 
   matchEngine.on('clockTick', (clock) => sendToRenderer('match:clockTick', clock));
   matchEngine.on('clockChanged', (clock) => sendToRenderer('match:clockChanged', clock));
+  matchEngine.on('setsChanged', (sets) => sendToRenderer('match:setsChanged', sets));
   matchEngine.on('stateChanged', (state) => sendToRenderer('match:stateChanged', state));
   matchEngine.on('temporaryStateChanged', (state) => sendToRenderer('match:tempStateChanged', state));
 
@@ -78,6 +79,11 @@ function registerIpcHandlers({
   ipcMain.handle('match:setAdditionalTimeMode', (_, mode) => matchEngine.setAdditionalTimeMode(mode));
   ipcMain.handle('match:approveAdditionalTime', () => matchEngine.approveAdditionalTime());
   ipcMain.handle('match:setPeriod', (_, period) => matchEngine.setPeriod(period));
+  ipcMain.handle('match:setBestOfSets', (_, count) => matchEngine.setBestOfSets(count));
+  ipcMain.handle('match:adjustSetTally', (_, { team, amount }) => matchEngine.adjustSetTally(team, amount));
+  ipcMain.handle('match:completeSet', (_, winner) => matchEngine.completeSet(winner));
+  ipcMain.handle('match:removeCompletedSet', (_, setNumber) => matchEngine.removeCompletedSet(setNumber));
+  ipcMain.handle('match:resetSets', () => matchEngine.resetSets());
 
   // --- Score IPC Handlers ---
   ipcMain.handle('score:get', () => scoreManager.getScore());
@@ -86,7 +92,7 @@ function registerIpcHandlers({
   ipcMain.handle('score:addAway', (_, amount) => scoreManager.addAway(amount));
   ipcMain.handle('score:subtractAway', (_, amount) => scoreManager.subtractAway(amount));
   ipcMain.handle('score:set', (_, { home, away }) => scoreManager.setScore(home, away));
-  ipcMain.handle('score:reset', () => scoreManager.resetScore());
+  ipcMain.handle('score:reset', () => matchEngine.resetScoreAndSets());
   ipcMain.handle('score:updateTeams', (_, teamsData) => scoreManager.updateTeams(teamsData));
 
   // --- Events IPC Handlers ---
@@ -126,7 +132,8 @@ function registerIpcHandlers({
 
   // --- Goal Workflow IPC Handlers ---
   ipcMain.handle('goal:trigger', async (_, { team, options }) => await goalWorkflow.triggerGoal(team, options));
-  ipcMain.handle('goal:continueToLive', () => goalWorkflow.continueToLive());
+  ipcMain.handle('goal:goToReplay', () => goalWorkflow.goToReplay());
+  ipcMain.handle('goal:continueToLive', async () => await goalWorkflow.continueToLive());
   ipcMain.handle('goal:abort', async () => await goalWorkflow.abort());
   ipcMain.handle('goal:getStatus', () => goalWorkflow.getStatus());
 

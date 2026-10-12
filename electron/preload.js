@@ -43,6 +43,16 @@ contextBridge.exposeInMainWorld('bosAPI', {
       setAdditionalTimeMode: (mode) => ipcRenderer.invoke('match:setAdditionalTimeMode', mode),
       approveAdditionalTime: () => ipcRenderer.invoke('match:approveAdditionalTime'),
     setPeriod: (p) => ipcRenderer.invoke('match:setPeriod', p),
+    setBestOfSets: (count) => ipcRenderer.invoke('match:setBestOfSets', count),
+    adjustSetTally: (team, amount) => ipcRenderer.invoke('match:adjustSetTally', { team, amount }),
+    completeSet: (winner) => ipcRenderer.invoke('match:completeSet', winner),
+    removeCompletedSet: (setNumber) => ipcRenderer.invoke('match:removeCompletedSet', setNumber),
+    resetSets: () => ipcRenderer.invoke('match:resetSets'),
+    onSetsChanged: (callback) => {
+      const cb = (_, data) => callback(data);
+      ipcRenderer.on('match:setsChanged', cb);
+      return () => ipcRenderer.removeListener('match:setsChanged', cb);
+    },
     onClockTick: (callback) => {
       const cb = (_, data) => callback(data);
       ipcRenderer.on('match:clockTick', cb);
@@ -145,6 +155,7 @@ contextBridge.exposeInMainWorld('bosAPI', {
   // Goal Workflow
   workflow: {
     triggerGoal: (team, options) => ipcRenderer.invoke('goal:trigger', { team, options }),
+    goToReplay: () => ipcRenderer.invoke('goal:goToReplay'),
     continueToLive: () => ipcRenderer.invoke('goal:continueToLive'),
     abort: () => ipcRenderer.invoke('goal:abort'),
     getStatus: () => ipcRenderer.invoke('goal:getStatus'),

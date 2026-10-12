@@ -47,10 +47,10 @@ window.GraphicsModule = (function() {
 
   function getFormData() {
     return {
-      title: inputLtTitle.value.trim() || 'UNDER REVIEW',
+      title: inputLtTitle.value.trim() || 'MESSAGE',
       subtitle: inputLtSubtitle.value.trim(),
       value: inputLtValue.value.trim(),
-      duration: parseInt(inputLtDuration.value, 10) || 5,
+      duration: Math.max(0, parseInt(inputLtDuration.value, 10) || 0),
       position: selectLtPosition.value,
       style: 'standard',
       color: inputLtColor.value || '#eab308'
@@ -110,7 +110,9 @@ window.GraphicsModule = (function() {
     if (queueState.active) {
       activeGraphicCard.classList.add('on-air');
       activeLtTitle.textContent = queueState.active.title;
-      activeLtTimer.textContent = `${String(queueState.active.remainingSeconds).padStart(2, '0')}s REMAINING`;
+      activeLtTimer.textContent = queueState.active.duration > 0
+        ? `${String(queueState.active.remainingSeconds).padStart(2, '0')}s REMAINING`
+        : 'ON AIR UNTIL HIDDEN';
     } else {
       activeGraphicCard.classList.remove('on-air');
       activeLtTitle.textContent = 'NO GRAPHIC ON AIR';

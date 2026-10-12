@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const currentSceneName = document.getElementById('current-scene-name');
   const currentTransitionInfo = document.getElementById('current-transition-info');
   const programStatusBadge = document.getElementById('program-status-badge');
-  const programDot = document.getElementById('program-dot');
   const programText = document.getElementById('program-text');
 
   const activeSequenceBar = document.getElementById('active-sequence-bar');
@@ -16,8 +15,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const seqStepPill = document.getElementById('seq-step-pill');
   const btnAbortSequence = document.getElementById('btn-abort-sequence');
   const btnContinueSequence = document.getElementById('btn-continue-sequence');
+  let sequenceStep = null;
 
   const btnEmergencyAbort = document.getElementById('btn-emergency-abort');
+  let liveSceneName = 'LIVE';
+  let replaySceneName = 'REPLAY';
 
   // Preview Drawer
   const previewDrawerToggle = document.getElementById('preview-drawer-toggle');
@@ -48,15 +50,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Sequence Abort
   btnAbortSequence.addEventListener('click', async () => {
-    await window.bosAPI.workflow.abort();
-    activeSequenceBar.classList.add('hidden');
-    updateProgramStatus('LIVE');
+    btnAbortSequence.disabled = true;
+    try {
+      await window.bosAPI.workflow.abort();
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      btnAbortSequence.disabled = false;
+    }
   });
 
   btnContinueSequence.addEventListener('click', async () => {
     btnContinueSequence.disabled = true;
     try {
-      await window.bosAPI.workflow.continueToLive();
+      if (sequenceStep === 'WAITING_FOR_REPLAY_OPT_IN') {
+        await window.bosAPI.workflow.goToReplay();
+      } else if (sequenceStep === 'WAITING_FOR_GO_AHEAD') {
+        await window.bosAPI.workflow.continueToLive();
+      }
+    } catch (error) {
+      window.alert(error.message);
     } finally {
       btnContinueSequence.disabled = false;
     }
@@ -76,6 +89,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initial OBS status
   try {
+    const sceneConfig = await window.bosAPI.config.get('scenes');
+    liveSceneName = sceneConfig.liveScene || liveSceneName;
+    replaySceneName = sceneConfig.replayScene || replaySceneName;
     const status = await window.bosAPI.obs.getStatus();
     updateObsStatusUI(status);
 
@@ -94,9 +110,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   window.bosAPI.obs.onSceneChanged((sceneName) => {
     currentSceneName.textContent = sceneName;
-    if (sceneName === 'REPLAY') {
+    if (sceneName === replaySceneName) {
       updateProgramStatus('REPLAY');
-    } else if (sceneName === 'LIVE') {
+    } else if (sceneName === liveSceneName) {
       updateProgramStatus('LIVE');
     }
   });
@@ -107,6 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Workflow Events
   window.bosAPI.workflow.onStarted((wf) => {
+    sequenceStep = null;
     activeSequenceBar.classList.remove('hidden');
     btnContinueSequence.classList.add('hidden');
     seqTitle.textContent = `AUTOMATED GOAL SEQUENCE: ${wf.team.toUpperCase()} GOAL`;
@@ -115,17 +132,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   window.bosAPI.workflow.onStep((data) => {
+    sequenceStep = data.step;
     seqStepPill.textContent = data.step.replace(/_/g, ' ');
-    btnContinueSequence.classList.toggle('hidden', data.step !== 'WAITING_FOR_GO_AHEAD');
+    const waitingForReplayChoice = data.step === 'WAITING_FOR_REPLAY_OPT_IN';
+    const waitingToReturnLive = data.step === 'WAITING_FOR_GO_AHEAD';
+    btnContinueSequence.textContent = waitingForReplayChoice ? 'GO TO REPLAY' : 'GO AHEAD → LIVE';
+    btnContinueSequence.classList.toggle('hidden', !waitingForReplayChoice && !waitingToReturnLive);
   });
 
   window.bosAPI.workflow.onCompleted(() => {
+    sequenceStep = null;
     activeSequenceBar.classList.add('hidden');
     btnContinueSequence.classList.add('hidden');
     updateProgramStatus('LIVE');
   });
 
   window.bosAPI.workflow.onAborted(() => {
+    sequenceStep = null;
     activeSequenceBar.classList.add('hidden');
     btnContinueSequence.classList.add('hidden');
     updateProgramStatus('LIVE');
@@ -147,16 +170,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (status.connected) {
       obsStatusIndicator.className = 'obs-status-indicator connected';
-      obsLabel.textContent = 'OBS ● CONNECTED';
+      obsLabel.textContent = 'OBS CONNECTED';
       if (status.currentScene) {
         currentSceneName.textContent = status.currentScene;
       }
     } else if (status.connecting) {
       obsStatusIndicator.className = 'obs-status-indicator';
-      obsLabel.textContent = 'OBS ● CONNECTING...';
+      obsLabel.textContent = 'OBS CONNECTING...';
     } else {
       obsStatusIndicator.className = 'obs-status-indicator disconnected';
-      obsLabel.textContent = 'OBS ● DISCONNECTED';
+      obsLabel.textContent = 'OBS DISCONNECTED';
       obsPing.textContent = '-- ms';
     }
   }

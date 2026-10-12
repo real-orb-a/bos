@@ -4,20 +4,20 @@
   const subtitleEl = document.getElementById('lt-subtitle');
   const badgeText = document.getElementById('badge-text');
   const valueEl = document.getElementById('lt-value');
+  const sideEl = document.querySelector('.lt-side');
 
   function showLowerThird(data) {
     if (!data) return;
 
-    titleEl.textContent = data.title || 'BROADCAST MESSAGE';
+    titleEl.textContent = data.title || 'MESSAGE';
     subtitleEl.textContent = data.subtitle || '';
     subtitleEl.style.display = data.subtitle ? 'block' : 'none';
 
     // Right-hand highlight block: small label (badge) + big accent value.
-    badgeText.textContent = data.badge || 'BROADCAST';
+    badgeText.textContent = data.badge || '';
     valueEl.textContent = data.value || '';
+    sideEl.classList.toggle('empty', !badgeText.textContent && !valueEl.textContent);
 
-    // House colour accent (Garnet / Emerald / Topaz, or a custom broadcast colour)
-    // drives the accent stripe, the title and the highlight value.
     const accent = data.color || '';
     if (accent) document.documentElement.style.setProperty('--lt-accent', accent);
 

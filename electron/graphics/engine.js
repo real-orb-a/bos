@@ -23,7 +23,7 @@ class GraphicsEngine extends EventEmitter {
 
     this.httpServer = null;
     this.wss = null;
-    this.port = this.config.get('graphics.httpPort') || 8088;
+    this.port = this.config.get('graphics.httpPort') ?? 8088;
     this.connectedClients = new Set();
     this.replayOverlayActive = false;
     this.replayOverlayData = null;
@@ -78,6 +78,7 @@ class GraphicsEngine extends EventEmitter {
 
     this.matchEngine.on('clockTick', (clock) => this._broadcastClockUpdate(clock));
     this.matchEngine.on('clockChanged', (clock) => this._broadcastClockUpdate(clock));
+    this.matchEngine.on('setsChanged', (sets) => this.broadcast({ type: 'SETS_UPDATE', sets }));
   }
 
   _broadcastClockUpdate(clock) {
@@ -202,6 +203,7 @@ class GraphicsEngine extends EventEmitter {
     });
 
     this.httpServer.listen(this.port, () => {
+      this.port = this.httpServer.address().port;
       console.log(`[GraphicsEngine] Server listening at http://localhost:${this.port}`);
     });
   }
@@ -267,7 +269,7 @@ class GraphicsEngine extends EventEmitter {
   showTopMessage(data = {}) {
     this.topMessageActive = true;
     this.topMessageData = {
-      title: data.title || 'BROADCAST MESSAGE',
+      title: data.title || 'MESSAGE',
       subtitle: data.subtitle || '',
       badge: data.badge || '',
       value: data.value || '',

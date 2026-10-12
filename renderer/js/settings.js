@@ -29,6 +29,8 @@ window.SettingsModule = (function() {
   const cfgTeamAwayShort = document.getElementById('cfg-team-away-short');
   const cfgTeamAwayColor = document.getElementById('cfg-team-away-color');
   const cfgTeamAwayHotkey = document.getElementById('cfg-team-away-hotkey');
+  const cfgHomeGoalAction = document.getElementById('cfg-home-goal-action');
+  const cfgAwayGoalAction = document.getElementById('cfg-away-goal-action');
 
   // Goal workflow
   const cfgGoalAnim = document.getElementById('cfg-goal-anim');
@@ -152,8 +154,10 @@ window.SettingsModule = (function() {
       if (config.goalWorkflow) {
         cfgGoalAnim.checked = !!config.goalWorkflow.showGoalAnimation;
         cfgCelebrationDur.value = config.goalWorkflow.celebrationDurationSeconds || 3.0;
-        cfgCaptureReplay.checked = config.goalWorkflow.captureReplayOnGoal !== false;
+        cfgCaptureReplay.checked = !!config.goalWorkflow.captureReplayOnGoal;
         cfgReplaySourceId.value = config.goalWorkflow.replaySourceId || '';
+        cfgHomeGoalAction.value = config.goalWorkflow.homeGoalActionLabel || 'GOAL';
+        cfgAwayGoalAction.value = config.goalWorkflow.awayGoalActionLabel || 'GOAL';
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -200,11 +204,14 @@ window.SettingsModule = (function() {
         }
       },
       goalWorkflow: {
+        ...(currentConfig.goalWorkflow || {}),
         showGoalAnimation: cfgGoalAnim.checked,
         goalAnimationDuration: 3.0,
         celebrationDurationSeconds: parseFloat(cfgCelebrationDur.value) || 3.0,
         captureReplayOnGoal: cfgCaptureReplay.checked,
         replaySourceId: cfgReplaySourceId.value.trim(),
+        homeGoalActionLabel: cfgHomeGoalAction.value.trim().toUpperCase() || 'GOAL',
+        awayGoalActionLabel: cfgAwayGoalAction.value.trim().toUpperCase() || 'GOAL',
         autoReturnLive: true
       }
     };
@@ -212,6 +219,11 @@ window.SettingsModule = (function() {
     try {
       await window.bosAPI.config.updateAll(newConfig);
       await window.bosAPI.score.updateTeams(newConfig.teams);
+      window.goalActionLabels = {
+        home: newConfig.goalWorkflow.homeGoalActionLabel,
+        away: newConfig.goalWorkflow.awayGoalActionLabel
+      };
+      window.MatchModule.refreshGoalLabels();
       modal.classList.add('hidden');
       alert('Settings saved successfully!');
     } catch (e) {

@@ -137,6 +137,11 @@
   cursor: pointer;
 }
 
+.set-tally-adjust:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .scoring-value-btn.active {
   border-color: var(--accent-cyan);
   background: var(--accent-cyan);
@@ -246,6 +251,65 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
+.volleyball-sets-control {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.set-score-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 40px;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.set-tally-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.set-tally-adjust {
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-main);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.set-tally-adjust:hover {
+  border-color: var(--accent-cyan);
+}
+
+.completed-sets-list {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 8px 0;
+}
+
+.completed-set-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.completed-set-remove {
+  flex: 0 0 auto;
+  color: #f87171;
+}
+
 .text-btn {
   background: none;
   border: none;
@@ -328,19 +392,6 @@
   border: 1px solid var(--border-color);
   padding: 10px 14px;
   border-radius: var(--radius-sm);
-}
-
-.status-indicator-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--text-dim);
-}
-
-.active-graphic-status.on-air .status-indicator-dot {
-  background: var(--warning-amber);
-  box-shadow: 0 0 10px var(--warning-amber);
-  animation: pulseDot 1s infinite alternate;
 }
 
 .status-meta {
@@ -537,15 +588,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.pulse-dot.red {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  box-shadow: 0 0 8px #ef4444;
-  animation: pulseDot 0.8s infinite alternate;
 }
 
 .replay-status-title {
@@ -1001,19 +1043,6 @@
   color: #e2e8f0;
 }
 
-.replay-request-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  flex-shrink: 0;
-}
-
-.replay-request-dot.idle { background: var(--text-dim); }
-.replay-request-dot.busy { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan); animation: pulse 1s ease-in-out infinite; }
-.replay-request-dot.ok   { background: var(--live-green); box-shadow: 0 0 8px var(--live-green); }
-.replay-request-dot.error{ background: #f87171; box-shadow: 0 0 8px #f87171; }
-
 .replay-request-detail {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
@@ -1050,14 +1079,6 @@
   border-radius: var(--radius-sm);
   padding: 6px 12px;
   cursor: pointer;
-}
-
-.replay-source-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--live-green);
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
 }
 
 .settings-divider {

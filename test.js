@@ -24,6 +24,7 @@ const GraphicsEngine = require('./electron/graphics/engine');
 // Use a throwaway config so tests can never write to the live operator config.
 const testConfigPath = path.join(os.tmpdir(), `bos-test-config-${Date.now()}.json`);
 const cfg = new ConfigManager(testConfigPath);
+cfg.set('graphics.httpPort', 0);
 console.log('✓ Config loaded (temp test config). OBS Host:', cfg.get('obs.host'));
 
 // The live operator config must stay parseable — strictly read-only check.
@@ -35,7 +36,6 @@ try {
   console.error('✗ Live config/bos.json failed to parse:', e.message);
   process.exit(1);
 }
-
 const score = new ScoreManager(cfg);
 console.log('✓ ScoreManager loaded. Initial:', score.getScore());
 
@@ -98,6 +98,92 @@ replay.captureReplay().then((res) => {
 
 const gw = new GoalWorkflowManager(cfg, match, score, events, graphics, replay, scenes);
 console.log('✓ GoalWorkflowManager initialized.');
+let workflowFailures = 0;
+const workflowValidation = (async () => {
+  cfg.set('goalWorkflow.showGoalAnimation', false);
+  cfg.set('goalWorkflow.celebrationDurationSeconds', 0);
+  cfg.set('goalWorkflow.captureReplayOnGoal', true);
+  let replaySceneRequests = 0;
+  let liveSceneRequests = 0;
+  let replayCaptureRequests = 0;
+  gw.scenes.switchToReplay = async () => {
+    replaySceneRequests++;
+    return true;
+  };
+  gw.scenes.switchToLive = async () => {
+    liveSceneRequests++;
+    return true;
+  };
+  gw.replay.captureAllReplays = async () => {
+    replayCaptureRequests++;
+    return { ok: true };
+  };
+  const waitForOperator = stepToWaitFor => new Promise(resolve => {
+    const onStep = ({ step }) => {
+      if (step === stepToWaitFor) {
+        gw.removeListener('workflowStep', onStep);
+        resolve();
+      }
+    };
+    gw.on('workflowStep', onStep);
+  });
+  const waitingForReplayOptIn = waitForOperator('WAITING_FOR_REPLAY_OPT_IN');
+  const goalSequence = gw.triggerGoal('home');
+  await waitingForReplayOptIn;
+  const remainedLiveByDefault = replaySceneRequests === 0 && liveSceneRequests === 0;
+  const replayOptInAccepted = gw.goToReplay();
+  const waitingForLiveReturn = waitForOperator('WAITING_FOR_GO_AHEAD');
+  await waitingForLiveReturn;
+  const returnedToLive = await gw.continueToLive();
+  const sequenceResult = await goalSequence;
+  if (remainedLiveByDefault && replayOptInAccepted && returnedToLive && sequenceResult === true && replaySceneRequests === 1 &&
+      replayCaptureRequests === 1 && liveSceneRequests === 1 && !gw.getStatus().isRunning) {
+    console.log('✓ Workflow: LIVE stays on air until replay opt-in, then GO AHEAD returns LIVE');
+  } else {
+    workflowFailures++;
+    console.error('✗ Workflow: replay return flow failed', {
+      returnedToLive, sequenceResult, replaySceneRequests, replayCaptureRequests,
+      liveSceneRequests, status: gw.getStatus()
+    });
+  }
+
+  const waitingForCancellation = waitForOperator('WAITING_FOR_REPLAY_OPT_IN');
+  const cancellableSequence = gw.triggerGoal('away');
+  await waitingForCancellation;
+  await gw.abort();
+  const cancelledResult = await cancellableSequence;
+  if (cancelledResult === false && replaySceneRequests === 1 && replayCaptureRequests === 2 &&
+      liveSceneRequests === 2 && !gw.getStatus().isRunning) {
+    console.log('✓ Workflow: cancellation before replay opt-in leaves program LIVE');
+  } else {
+    workflowFailures++;
+    console.error('✗ Workflow: cancellation did not return cleanly to LIVE', {
+      cancelledResult, replaySceneRequests, replayCaptureRequests,
+      liveSceneRequests, status: gw.getStatus()
+    });
+  }
+
+  const waitingToCancelReplay = waitForOperator('WAITING_FOR_REPLAY_OPT_IN');
+  const replayCancellationSequence = gw.triggerGoal('home');
+  await waitingToCancelReplay;
+  gw.goToReplay();
+  await waitForOperator('WAITING_FOR_GO_AHEAD');
+  await gw.abort();
+  const replayCancellationResult = await replayCancellationSequence;
+  if (replayCancellationResult === false && replaySceneRequests === 2 &&
+      replayCaptureRequests === 3 && liveSceneRequests === 3 && !gw.getStatus().isRunning) {
+    console.log('✓ Workflow: cancelling after replay opt-in returns to LIVE');
+  } else {
+    workflowFailures++;
+    console.error('✗ Workflow: cancellation while replay is on air failed', {
+      replayCancellationResult, replaySceneRequests, replayCaptureRequests,
+      liveSceneRequests, status: gw.getStatus()
+    });
+  }
+})().catch(error => {
+  workflowFailures++;
+  console.error('✗ Workflow validation failed:', error.message);
+});
 
 // ---- Match clock rework: set time, additional-time overlay, timer modes ----
 let clockFailures = 0;
@@ -112,10 +198,13 @@ const assertClock = (label, cond) => {
 
 const noticePayload = graphics.lowerThird.show({ title: 'STYLE TEST', style: 'alert', duration: 0 });
 assertClock('lower-third requests always use standard style', noticePayload.data.style === 'standard');
+assertClock('zero-duration message remains on air until explicitly hidden',
+  graphics.lowerThird.getState().isVisible && graphics.lowerThird.getState().remainingSeconds === 0);
 assertClock('notice presets all use standard style',
   graphics.messages.getPresets().every(preset => preset.style === 'standard'));
-const queuedNotice = graphics.messages.enqueue({ title: 'QUEUED STYLE TEST', style: 'f1-banner' });
+const queuedNotice = graphics.messages.enqueue({ title: 'QUEUED STYLE TEST', style: 'f1-banner', duration: 0 });
 assertClock('queued notices always use standard style', queuedNotice.style === 'standard');
+assertClock('queued message accepts zero duration for manual dismissal', queuedNotice.duration === 0);
 graphics.messages.clearQueue();
 graphics.lowerThird.hide();
 
@@ -208,9 +297,62 @@ assertClock('approval starts the added-time clock at 00:00', s.awaitingStoppageA
 match.setClock({ stoppageMinutes: 0 });
 match.setAdditionalTimeMode('automatic');
 
+match.setTimerMode('none');
+assertClock('no-time mode displays without a running clock',
+  match.getClockState().formatted === 'NO TIME' && match.startClock().running === false);
 match.setTimerMode('stopwatch');
 match.resetClock();
-console.log('✓ Clock rework assertions complete.');
+
+const initialSets = match.getSetState();
+match.setBestOfSets(3);
+score.setScore(25, 22);
+match.completeSet('home');
+match.completeSet('away');
+s = match.getSetState();
+assertClock('volleyball set winners are stored and counted manually',
+  s.bestOfSets === 3 && s.homeSets === 1 && s.awaySets === 1 &&
+  s.completedSets[0].winner === 'home' && s.completedSets[0].points.home === 25 &&
+  s.completedSets[0].points.away === 22 && score.home.score === 0 && score.away.score === 0 &&
+  s.completedSets[1].winner === 'away');
+s = match.removeCompletedSet(1);
+assertClock('individual set removal updates the series and renumbers later sets',
+  s.homeSets === 0 && s.awaySets === 1 && s.completedSets.length === 1 &&
+  s.completedSets[0].number === 1 && s.completedSets[0].winner === 'away');
+s = match.adjustSetTally('home', 1);
+assertClock('live set tally can be increased without changing set history',
+  s.homeSets === 1 && s.completedSets.length === 1 && s.completedSets[0].winner === 'away');
+s = match.adjustSetTally('home', -1);
+assertClock('live set tally can be decreased without changing set history',
+  s.homeSets === 0 && s.completedSets.length === 1 && s.completedSets[0].winner === 'away');
+const noNegativeSetTally = match.adjustSetTally('home', -1);
+assertClock('live set tally cannot be decreased below zero', noNegativeSetTally.homeSets === 0);
+let invalidSetRemovalRejected = false;
+try {
+  match.removeCompletedSet(2);
+} catch {
+  invalidSetRemovalRejected = true;
+}
+assertClock('removing a non-existent set is rejected', invalidSetRemovalRejected);
+match.resetSets();
+match.setBestOfSets(3);
+score.setScore(2, 0);
+match.completeSet('home');
+score.setScore(0, 2);
+match.completeSet('away');
+const permissiveBestOfState = match.setBestOfSets(1);
+assertClock('best-of count can be lowered below completed sets without deleting results',
+ permissiveBestOfState.bestOfSets === 1 && permissiveBestOfState.completedSets.length === 2);
+score.setScore(8, 6);
+const scoreAndSetsReset = match.resetScoreAndSets();
+assertClock('manual match score reset also clears completed sets',
+  scoreAndSetsReset.score.home.score === 0 && scoreAndSetsReset.score.away.score === 0 &&
+  scoreAndSetsReset.sets.completedSets.length === 0 &&
+  scoreAndSetsReset.sets.homeSets === 0 && scoreAndSetsReset.sets.awaySets === 0);
+match.setBestOfSets(initialSets.bestOfSets);
+
+match.setTimerMode('stopwatch');
+match.resetClock();
+console.log('✓ Match, message, and volleyball assertions complete.');
 
 const check = () => {
   try {
@@ -231,7 +373,11 @@ const check = () => {
     console.error(`${replayFailures} replay assertion(s) FAILED`);
     process.exit(1);
   }
+  if (workflowFailures > 0) {
+    console.error(`${workflowFailures} workflow assertion(s) FAILED`);
+    process.exit(1);
+  }
   console.log('All backend modules loaded and validated successfully!');
   process.exit(0);
 };
-setTimeout(check, 500);
+setTimeout(() => Promise.resolve(workflowValidation).finally(check), 500);

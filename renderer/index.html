@@ -17,7 +17,6 @@
       </div>
 
       <div class="program-monitor-badge" id="program-status-badge">
-        <span class="monitor-dot" id="program-dot"></span>
         <span class="monitor-text" id="program-text">PROGRAM: LIVE</span>
       </div>
 
@@ -50,8 +49,7 @@
 
     <div class="header-right">
       <div class="obs-status-indicator" id="obs-status-indicator">
-        <span class="obs-dot" id="obs-dot"></span>
-        <span class="obs-label" id="obs-label">OBS ● CONNECTING...</span>
+        <span class="obs-label" id="obs-label">OBS CONNECTING...</span>
         <span class="obs-ping" id="obs-ping">-- ms</span>
         <button class="obs-reconnect-btn" id="btn-obs-reconnect" title="Reconnect OBS">↺</button>
       </div>
@@ -70,13 +68,12 @@
   <!-- Automated Goal Sequence Banner (Shows during active sequence) -->
   <div class="active-sequence-bar hidden" id="active-sequence-bar">
     <div class="sequence-info">
-      <span class="sequence-pulse"></span>
       <span class="sequence-title" id="seq-title">AUTOMATED GOAL SEQUENCE IN PROGRESS</span>
-      <span class="sequence-step-pill" id="seq-step-pill">PREPARING REPLAY</span>
+      <span class="sequence-step-pill" id="seq-step-pill">GOAL SEQUENCE</span>
     </div>
     <div class="sequence-actions">
       <button class="sequence-go-ahead-btn hidden" id="btn-continue-sequence">GO AHEAD → LIVE</button>
-      <button class="sequence-abort-btn" id="btn-abort-sequence">SKIP / CANCEL SEQUENCE</button>
+      <button class="sequence-abort-btn" id="btn-abort-sequence">CANCEL SEQUENCE</button>
     </div>
   </div>
 
@@ -112,27 +109,28 @@
             <label>PERIOD LABEL</label>
             <input type="text" id="select-period" class="styled-input" value="1st Half" maxlength="24">
           </div>
-          <div class="form-group flex-1">
+          <div class="form-group flex-1" id="regulation-time-control">
             <label>SET TIME (MIN)</label>
             <input type="number" id="input-regulation-min" class="styled-input" value="90" min="1" max="240">
           </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="start-time-control">
           <label>SET CLOCK / START TIME (MM:SS)</label>
           <input type="text" id="input-start-time" class="styled-input" value="00:00" inputmode="numeric" placeholder="00:00">
         </div>
 
         <!-- Timer Mode: count up (football) or count down (basketball) -->
-        <div class="form-group">
+        <div class="form-group" id="timer-mode-control">
           <label>TIMER MODE</label>
           <select id="select-timer-mode" class="styled-select">
             <option value="stopwatch" selected>STOPWATCH — COUNT UP (FOOTBALL)</option>
             <option value="countdown">COUNTDOWN — COUNT DOWN (BASKETBALL)</option>
+            <option value="none">NO TIME — MANUAL PLAY</option>
           </select>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="additional-time-mode-control">
           <label>ADDED TIME START</label>
           <select id="select-additional-time-mode" class="styled-select">
             <option value="automatic">AUTOMATIC AT SET TIME</option>
@@ -141,7 +139,7 @@
         </div>
 
         <!-- Additional time: counted from 00:00 below the clock after the set time -->
-        <div class="form-group">
+        <div class="form-group" id="stoppage-time-control">
           <label>ADDITIONAL TIME (AFTER SET TIME)</label>
           <div class="stoppage-buttons">
             <button class="stoppage-btn" data-min="0">0</button>
@@ -161,6 +159,38 @@
             <button type="button" class="scoring-value-btn" data-score-points="2" aria-pressed="false">2</button>
             <button type="button" class="scoring-value-btn" data-score-points="3" aria-pressed="false">3</button>
           </div>
+
+        </div>
+
+        <div class="volleyball-sets-control">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>VOLLEYBALL TOTAL SETS</label>
+              <input type="number" id="input-best-of-sets" class="styled-input" value="3" min="1" max="9">
+            </div>
+            <div class="form-group flex-1">
+              <label>SETS WON</label>
+              <div class="set-score-display">
+                <div class="set-tally-control">
+                  <button type="button" class="set-tally-adjust" data-team="home" data-amount="-1" aria-label="Decrease home sets">−</button>
+                  <span id="home-sets-won">0</span>
+                  <button type="button" class="set-tally-adjust" data-team="home" data-amount="1" aria-label="Increase home sets">+</button>
+                </div>
+                <span>–</span>
+                <div class="set-tally-control">
+                  <button type="button" class="set-tally-adjust" data-team="away" data-amount="-1" aria-label="Decrease away sets">−</button>
+                  <span id="away-sets-won">0</span>
+                  <button type="button" class="set-tally-adjust" data-team="away" data-amount="1" aria-label="Increase away sets">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <button type="button" class="secondary-action-btn flex-1" id="btn-award-set-home">AWARD SET TO HOME</button>
+            <button type="button" class="secondary-action-btn flex-1" id="btn-award-set-away">AWARD SET TO AWAY</button>
+          </div>
+          <div class="completed-sets-list" id="completed-sets-list">No sets completed</div>
+          <button type="button" class="text-btn" id="btn-reset-sets">RESET SET RESULTS</button>
         </div>
 
         <!-- DEDICATED GOAL BUTTONS (Section 9) -->
@@ -194,7 +224,7 @@
 
         <!-- Reset Score / Quick Sync -->
         <div class="card-footer-actions">
-          <button class="action-btn-secondary" id="btn-reset-score">RESET SCORE</button>
+          <button class="action-btn-secondary" id="btn-reset-score">RESET SCORE + SETS</button>
         </div>
         <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-scorebug" type="button" aria-pressed="true">FADE SCORE BUG OUT</button>
       </div>
@@ -211,17 +241,16 @@
       </div>
     </section>
 
-    <!-- COLUMN 2: DYNAMIC BROADCAST MESSAGES & LOWER THIRDS -->
+    <!-- COLUMN 2: ON-SCREEN MESSAGES -->
     <section class="workspace-col col-graphics">
       <div class="card-panel">
         <div class="panel-header">
-          <h2>BROADCAST MESSAGE</h2>
+          <h2>ON-SCREEN MESSAGE</h2>
           <span class="panel-badge">ON AIR GRAPHIC</span>
         </div>
 
         <!-- Active Graphic Countdown (lower-third zone) -->
         <div class="active-graphic-status" id="active-graphic-card">
-          <span class="status-indicator-dot" id="lt-status-dot"></span>
           <div class="status-meta">
             <div class="status-title" id="active-lt-title">NO GRAPHIC ON AIR</div>
             <div class="status-timer" id="active-lt-timer">READY</div>
@@ -247,8 +276,8 @@
         </div>
 
         <div class="form-group">
-          <label>DURATION (SEC)</label>
-          <input type="number" id="input-lt-duration" class="styled-input" value="5" min="1" max="60">
+          <label>DURATION (SEC, 0 = UNTIL HIDDEN)</label>
+          <input type="number" id="input-lt-duration" class="styled-input" value="5" min="0">
         </div>
         <div class="form-row">
           <div class="form-group flex-1">
@@ -272,7 +301,7 @@
 
         <!-- Quick Presets (Section 20 & 22) -->
         <div class="preset-section">
-          <label class="section-label">QUICK BROADCAST PRESETS</label>
+          <label class="section-label">QUICK MESSAGES</label>
           <div class="preset-grid" id="preset-buttons-container">
             <!-- Dynamic Presets -->
           </div>
@@ -302,7 +331,6 @@
         <!-- Source Record replay request state (the REQUEST, not any footage) -->
         <div class="replay-request-card">
           <div class="replay-request-status" id="replay-request-status">
-            <span class="replay-request-dot" id="replay-request-dot"></span>
             <span class="replay-request-text" id="replay-request-text">Ready — Source Record owns the replay buffer.</span>
           </div>
           <div class="replay-request-detail" id="replay-request-detail">No replay save requested yet.</div>
@@ -449,6 +477,10 @@
             <label>GOAL KEY</label>
             <input type="text" id="cfg-team-home-hotkey" class="styled-input" value="G" maxlength="16" placeholder="G or F1">
           </div>
+          <div class="form-group">
+            <label>GOAL BUTTON ACTION (e.g. GOAL, POINT)</label>
+            <input type="text" id="cfg-home-goal-action" class="styled-input" value="GOAL" maxlength="24">
+          </div>
 
           <h3 style="margin-top: 16px;">AWAY TEAM</h3>
           <div class="form-row">
@@ -468,6 +500,10 @@
           <div class="form-group">
             <label>GOAL KEY</label>
             <input type="text" id="cfg-team-away-hotkey" class="styled-input" value="T" maxlength="16" placeholder="T or F2">
+          </div>
+          <div class="form-group">
+            <label>GOAL BUTTON ACTION (e.g. GOAL, POINT)</label>
+            <input type="text" id="cfg-away-goal-action" class="styled-input" value="GOAL" maxlength="24">
           </div>
 
           <h3 style="margin-top: 16px;">HOUSE PALETTES</h3>

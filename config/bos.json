@@ -17,11 +17,11 @@
       "logo": ""
     },
     "away": {
-      "name": "EMERALD",
-      "short": "EME",
-      "color": "#10b981",
-      "secondaryColor": "#064e3b",
-      "hotkey": "KeyE",
+      "name": "TOPAZ",
+      "short": "TOP",
+      "color": "#eab308",
+      "secondaryColor": "#713f12",
+      "hotkey": "KeyT",
       "score": 0,
       "logo": ""
     }
@@ -84,12 +84,38 @@
     "showGoalAnimation": true,
     "goalAnimationDuration": 3,
     "celebrationDurationSeconds": 3,
-    "captureReplayOnGoal": true,
+    "captureReplayOnGoal": false,
     "replaySourceId": "",
     "autoReturnLive": true
   },
   "match": {
-    "timerMode": "stopwatch",
-    "additionalTimeMode": "approval"
+    "timerMode": "none",
+    "additionalTimeMode": "approval",
+    "bestOfSets": 3,
+    "completedSets": [
+      {
+        "number": 1,
+        "winner": "away",
+        "team": "TOPAZ",
+        "points": {
+          "home": 0,
+          "away": 0
+        },
+        "timestamp": 1791819873150
+      },
+      {
+        "number": 2,
+        "winner": "home",
+        "team": "GARNET",
+        "points": {
+          "home": 0,
+          "away": 0
+        },
+        "timestamp": 1791819879014
+      }
+    ],
+    "periodLabel": "1st Set",
+    "homeSetsWon": 0,
+    "awaySetsWon": 0
   }
 }

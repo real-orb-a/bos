@@ -16,6 +16,7 @@ window.MatchModule = (function() {
   const homeGoalHotkey = document.getElementById('home-goal-hotkey');
   const awayGoalHotkey = document.getElementById('away-goal-hotkey');
   let selectedScoreValue = 1;
+  window.goalActionLabels = { home: 'GOAL', away: 'GOAL' };
 
   const selectMatchState = document.getElementById('select-match-state');
   const selectPeriod = document.getElementById('select-period');
@@ -31,6 +32,18 @@ window.MatchModule = (function() {
   const selectAdditionalTimeMode = document.getElementById('select-additional-time-mode');
   const btnApproveAddedTime = document.getElementById('btn-approve-added-time');
   const inputRegulationMin = document.getElementById('input-regulation-min');
+  const regulationTimeControl = document.getElementById('regulation-time-control');
+  const startTimeControl = document.getElementById('start-time-control');
+  const additionalTimeModeControl = document.getElementById('additional-time-mode-control');
+  const stoppageTimeControl = document.getElementById('stoppage-time-control');
+  const inputBestOfSets = document.getElementById('input-best-of-sets');
+  const homeSetsWon = document.getElementById('home-sets-won');
+  const awaySetsWon = document.getElementById('away-sets-won');
+  const setTallyAdjustButtons = document.querySelectorAll('.set-tally-adjust');
+  const completedSetsList = document.getElementById('completed-sets-list');
+  const btnAwardSetHome = document.getElementById('btn-award-set-home');
+  const btnAwardSetAway = document.getElementById('btn-award-set-away');
+  const btnResetSets = document.getElementById('btn-reset-sets');
 
   const eventFeedList = document.getElementById('event-feed-list');
   const btnClearEvents = document.getElementById('btn-clear-events');
@@ -69,7 +82,7 @@ window.MatchModule = (function() {
     btnAddAway.addEventListener('click', () => window.bosAPI.score.addAway(selectedScoreValue));
     btnSubAway.addEventListener('click', () => window.bosAPI.score.subtractAway(selectedScoreValue));
     btnResetScore.addEventListener('click', () => {
-      if (confirm('Reset match score to 0 - 0?')) {
+      if (confirm('Reset match score and all completed sets?')) {
         window.bosAPI.score.reset();
       }
     });
@@ -120,6 +133,37 @@ window.MatchModule = (function() {
       const mins = Math.max(1, parseInt(inputRegulationMin.value, 10) || 90);
       inputRegulationMin.value = mins;
       window.bosAPI.match.setClock({ regulationMinutes: mins });
+    });
+
+    inputBestOfSets.addEventListener('change', async () => {
+      try {
+        const sets = await window.bosAPI.match.setBestOfSets(inputBestOfSets.value);
+        updateSetUI(sets);
+      } catch (err) {
+        window.alert(err.message);
+        const state = await window.bosAPI.match.getState();
+        updateSetUI(state.sets);
+      }
+    });
+
+    btnAwardSetHome.addEventListener('click', () => completeSet('home'));
+    btnAwardSetAway.addEventListener('click', () => completeSet('away'));
+    setTallyAdjustButtons.forEach(button => {
+      button.addEventListener('click', async () => {
+        try {
+          const sets = await window.bosAPI.match.adjustSetTally(
+            button.dataset.team,
+            Number(button.dataset.amount)
+          );
+          updateSetUI(sets);
+        } catch (err) {
+          window.alert(err.message);
+        }
+      });
+    });
+    btnResetSets.addEventListener('click', async () => {
+      if (!confirm('Reset all completed volleyball sets?')) return;
+      updateSetUI(await window.bosAPI.match.resetSets());
     });
 
     inputStartTime.addEventListener('change', () => {
@@ -175,10 +219,20 @@ window.MatchModule = (function() {
       const scores = await window.bosAPI.score.get();
       updateScoreUI(scores);
 
+      const goalWorkflow = await window.bosAPI.config.get('goalWorkflow');
+      if (goalWorkflow) {
+        window.goalActionLabels = {
+          home: goalWorkflow.homeGoalActionLabel || 'GOAL',
+          away: goalWorkflow.awayGoalActionLabel || 'GOAL'
+        };
+        refreshGoalLabels();
+      }
+
       const matchState = await window.bosAPI.match.getState();
       if (matchState) {
         selectMatchState.value = matchState.matchState;
         updateClockUI(matchState.clock);
+        updateSetUI(matchState.sets);
       }
 
       const events = await window.bosAPI.events.get(30);
@@ -219,6 +273,10 @@ window.MatchModule = (function() {
       updateClockUI(clock);
     });
 
+    window.bosAPI.match.onSetsChanged((sets) => {
+      updateSetUI(sets);
+    });
+
     window.bosAPI.match.onStateChanged((data) => {
       selectMatchState.value = data.current;
     });
@@ -237,16 +295,20 @@ window.MatchModule = (function() {
     if (scores.home) {
       displayHomeScore.textContent = scores.home.score;
       cardHomeName.textContent = scores.home.name;
-      btnGarnetGoal.querySelector('.btn-text').textContent = `${scores.home.name} GOAL`;
+      btnGarnetGoal.querySelector('.btn-text').textContent =
+        `${scores.home.name} ${window.goalActionLabels?.home || 'GOAL'}`;
       updateTeamHotkey(btnGarnetGoal, homeGoalHotkey, scores.home, 'KeyG');
       applyTeamBranding('home', scores.home);
+      btnAwardSetHome.textContent = `AWARD SET TO ${scores.home.name}`;
     }
     if (scores.away) {
       displayAwayScore.textContent = scores.away.score;
       cardAwayName.textContent = scores.away.name;
-      btnTopazGoal.querySelector('.btn-text').textContent = `${scores.away.name} GOAL`;
+      btnTopazGoal.querySelector('.btn-text').textContent =
+        `${scores.away.name} ${window.goalActionLabels?.away || 'GOAL'}`;
       updateTeamHotkey(btnTopazGoal, awayGoalHotkey, scores.away, 'KeyT');
       applyTeamBranding('away', scores.away);
+      btnAwardSetAway.textContent = `AWARD SET TO ${scores.away.name}`;
     }
   }
 
@@ -255,6 +317,13 @@ window.MatchModule = (function() {
     pill.dataset.code = code;
     pill.textContent = code.replace(/^Key/, '').replace(/^Digit/, '');
     button.title = `Goal hotkey: ${pill.textContent}`;
+  }
+
+  function refreshGoalLabels() {
+    btnGarnetGoal.querySelector('.btn-text').textContent =
+      `${cardHomeName.textContent} ${window.goalActionLabels.home}`;
+    btnTopazGoal.querySelector('.btn-text').textContent =
+      `${cardAwayName.textContent} ${window.goalActionLabels.away}`;
   }
 
   function applyTeamBranding(side, team) {
@@ -268,10 +337,15 @@ window.MatchModule = (function() {
 
   function updateClockUI(clock) {
     if (!clock) return;
+    const noTime = clock.mode === 'none';
     masterClockDisplay.textContent = clock.formatted;
     masterPeriodDisplay.textContent = `${clock.period.toUpperCase()} ${clock.stoppageTime}`;
     selectPeriod.value = clock.period;
-    if (document.activeElement !== inputStartTime) inputStartTime.value = clock.formatted;
+    if (!noTime && document.activeElement !== inputStartTime) inputStartTime.value = clock.formatted;
+    regulationTimeControl.hidden = noTime;
+    startTimeControl.hidden = noTime;
+    additionalTimeModeControl.hidden = noTime;
+    stoppageTimeControl.hidden = noTime;
 
     // Timer mode + set time (don't clobber the input while the operator is typing)
     if (clock.mode) selectTimerMode.value = clock.mode;
@@ -285,7 +359,7 @@ window.MatchModule = (function() {
     }
 
     // Additional-time overlay below the frozen clock (00:00 counting up to N:00)
-    if (clock.inStoppage && clock.stoppageDisplay) {
+    if (!noTime && clock.inStoppage && clock.stoppageDisplay) {
       masterStoppageDisplay.textContent = clock.stoppageDisplay;
       masterStoppageDisplay.classList.remove('hidden');
     } else {
@@ -300,10 +374,69 @@ window.MatchModule = (function() {
       btnClockToggle.innerHTML = `<svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
       masterClockDisplay.style.color = '#38bdf8';
     }
-    btnClockToggle.disabled = !!clock.awaitingStoppageApproval;
+    btnClockToggle.disabled = noTime || !!clock.awaitingStoppageApproval;
+    btnClockReset.disabled = noTime;
     btnClockToggle.title = clock.awaitingStoppageApproval
       ? 'Use GO AHEAD to start additional time'
-      : 'Spacebar: Start/Pause';
+      : noTime ? 'Clock is disabled in no-time mode' : 'Spacebar: Start/Pause';
+  }
+
+  async function completeSet(winner) {
+    try {
+      const sets = await window.bosAPI.match.completeSet(winner);
+      updateSetUI(sets);
+      const completedSet = sets.completedSets[sets.completedSets.length - 1];
+      await window.bosAPI.graphics.showLowerThird({
+        title: `SET WON BY: ${completedSet.team}`,
+        duration: 5
+      });
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
+  async function removeCompletedSet(setNumber) {
+    if (!window.confirm(`Remove Set ${setNumber} from the results?`)) return;
+    try {
+      updateSetUI(await window.bosAPI.match.removeCompletedSet(setNumber));
+    } catch (err) {
+      window.alert(err.message);
+    }
+  }
+
+  function updateSetUI(sets) {
+    if (!sets) return;
+    inputBestOfSets.value = sets.bestOfSets;
+    homeSetsWon.textContent = sets.homeSets;
+    awaySetsWon.textContent = sets.awaySets;
+    setTallyAdjustButtons.forEach(button => {
+      const teamTally = button.dataset.team === 'home' ? sets.homeSets : sets.awaySets;
+      button.disabled = button.dataset.amount === '-1' && teamTally === 0;
+    });
+    const completed = sets.completedSets || [];
+    completedSetsList.replaceChildren();
+    if (!completed.length) {
+      completedSetsList.textContent = 'No sets completed';
+    } else {
+      completed.forEach(set => {
+        const row = document.createElement('div');
+        row.className = 'completed-set-entry';
+        const label = document.createElement('span');
+        const points = set.points ? ` (${set.points.home}–${set.points.away})` : '';
+        label.textContent = `SET ${set.number}: ${set.team}${points}`;
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'text-btn completed-set-remove';
+        removeButton.textContent = 'REMOVE';
+        removeButton.setAttribute('aria-label', `Remove set ${set.number}`);
+        removeButton.addEventListener('click', () => removeCompletedSet(set.number));
+        row.append(label, removeButton);
+        completedSetsList.append(row);
+      });
+    }
+    const seriesComplete = completed.length >= sets.bestOfSets;
+    btnAwardSetHome.disabled = seriesComplete;
+    btnAwardSetAway.disabled = seriesComplete;
   }
 
   function renderEventFeed(events) {
@@ -340,5 +473,5 @@ window.MatchModule = (function() {
     return div;
   }
 
-  return { init, triggerGoalSequence, handleGoalHotkey };
+  return { init, triggerGoalSequence, handleGoalHotkey, refreshGoalLabels };
 })();

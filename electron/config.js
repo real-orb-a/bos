@@ -51,6 +51,10 @@ class ConfigManager extends EventEmitter {
         timerMode: 'stopwatch',
           // 'automatic' starts added time at regulation; 'approval' waits for GO AHEAD.
           additionalTimeMode: 'automatic',
+        bestOfSets: 3,
+        completedSets: [],
+        homeSetsWon: 0,
+        awaySetsWon: 0,
         periodLabel: '1st Half',
         // The "set time": minutes the clock runs before additional/stoppage time.
         regulationMinutes: 90
@@ -60,8 +64,10 @@ class ConfigManager extends EventEmitter {
         showGoalAnimation: true,
         goalAnimationDuration: 3.0,
         celebrationDurationSeconds: 3.0,
-        captureReplayOnGoal: true,
+        captureReplayOnGoal: false,
         replaySourceId: '',
+        homeGoalActionLabel: 'GOAL',
+        awayGoalActionLabel: 'GOAL',
         autoReturnLive: true
       }
     };
