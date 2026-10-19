@@ -2,26 +2,25 @@
   "obs": {
     "host": "localhost",
     "port": 4455,
-    "password": "Adam@123",
     "autoReconnect": true,
     "reconnectIntervalMs": 3000
   },
   "teams": {
     "home": {
-      "name": "GARNET",
-      "short": "GAR",
-      "color": "#e11d48",
-      "secondaryColor": "#7f1d1d",
-      "hotkey": "KeyG",
-      "score": 0,
-      "logo": ""
-    },
-    "away": {
       "name": "TOPAZ",
       "short": "TOP",
       "color": "#eab308",
       "secondaryColor": "#713f12",
       "hotkey": "KeyT",
+      "score": 0,
+      "logo": ""
+    },
+    "away": {
+      "name": "EMERALD",
+      "short": "EME",
+      "color": "#10b981",
+      "secondaryColor": "#064e3b",
+      "hotkey": "KeyE",
       "score": 0,
       "logo": ""
     }
@@ -71,6 +70,12 @@
     "defaultTransition": "Fade",
     "durationMs": 300
   },
+  "match": {
+    "timerMode": "stopwatch",
+    "additionalTimeMode": "automatic",
+    "periodLabel": "1st Half",
+    "regulationMinutes": 90
+  },
   "hotkeys": {
     "garnetGoal": "KeyG",
     "topazGoal": "KeyT",
@@ -78,44 +83,16 @@
     "returnLive": "KeyL",
     "underReview": "KeyU",
     "hideLowerThird": "KeyH",
-    "clockToggle": "Space"
+    "clockToggle": "Space",
+    "sequencePrevious": "BracketLeft",
+    "sequenceNext": "BracketRight"
   },
   "goalWorkflow": {
     "showGoalAnimation": true,
     "goalAnimationDuration": 3,
     "celebrationDurationSeconds": 3,
-    "captureReplayOnGoal": false,
+    "captureReplayOnGoal": true,
     "replaySourceId": "",
     "autoReturnLive": true
-  },
-  "match": {
-    "timerMode": "none",
-    "additionalTimeMode": "approval",
-    "bestOfSets": 3,
-    "completedSets": [
-      {
-        "number": 1,
-        "winner": "away",
-        "team": "TOPAZ",
-        "points": {
-          "home": 0,
-          "away": 0
-        },
-        "timestamp": 1791819873150
-      },
-      {
-        "number": 2,
-        "winner": "home",
-        "team": "GARNET",
-        "points": {
-          "home": 0,
-          "away": 0
-        },
-        "timestamp": 1791819879014
-      }
-    ],
-    "periodLabel": "1st Set",
-    "homeSetsWon": 0,
-    "awaySetsWon": 0
   }
 }

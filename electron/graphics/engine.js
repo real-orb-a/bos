@@ -3,18 +3,33 @@ const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const EventEmitter = require('events');
+const net = require('net');
 
 const ScoreGraphicsController = require('./score');
 const GoalGraphicsController = require('./goal');
 const LowerThirdGraphicsController = require('./lowerThird');
 const MessagesManager = require('./messages');
+const VolleyballGraphicsController = require('./volleyball');
+const BasketballGraphicsController = require('./basketball');
 
 class GraphicsEngine extends EventEmitter {
-  constructor(configManager, scoreManager, matchEngine) {
+  constructor(configManager, scoreManager, matchEngine, volleyballEngine = null, basketballEngine = null) {
     super();
     this.config = configManager;
     this.scoreManager = scoreManager;
     this.matchEngine = matchEngine;
+    this.volleyballEngine = volleyballEngine;
+    this.volleyballGraphics = volleyballEngine ? new VolleyballGraphicsController(volleyballEngine) : null;
+    this.basketballEngine = basketballEngine;
+    this.basketballGraphics = basketballEngine ? new BasketballGraphicsController(basketballEngine) : null;
+    const volleyballState = volleyballEngine && volleyballEngine.getState();
+    const initialAnnouncement = volleyballState && volleyballState.activeMatch && volleyballState.activeMatch.announcement.live;
+    this._lastVolleyballAnnouncementId = initialAnnouncement ? initialAnnouncement.id : null;
+    this._lastVolleyballAnnouncementRevision = initialAnnouncement ? initialAnnouncement.revision : 0;
+    const basketballState = basketballEngine && basketballEngine.getState();
+    const basketballAnnouncement = basketballState && basketballState.match && basketballState.match.announcement.live;
+    this._lastBasketballAnnouncementId = basketballAnnouncement ? basketballAnnouncement.id : null;
+    this._lastBasketballAnnouncementRevision = basketballAnnouncement ? basketballAnnouncement.revision : 0;
 
     this.scoreGraphics = new ScoreGraphicsController(scoreManager, matchEngine);
     this.goalGraphics = new GoalGraphicsController(configManager);
@@ -23,8 +38,9 @@ class GraphicsEngine extends EventEmitter {
 
     this.httpServer = null;
     this.wss = null;
-    this.port = this.config.get('graphics.httpPort') ?? 8088;
+    this.port = this.config.get('graphics.httpPort') || 8088;
     this.connectedClients = new Set();
+    this.listenError = null;
     this.replayOverlayActive = false;
     this.replayOverlayData = null;
     this.scorebugVisible = true;
@@ -78,7 +94,58 @@ class GraphicsEngine extends EventEmitter {
 
     this.matchEngine.on('clockTick', (clock) => this._broadcastClockUpdate(clock));
     this.matchEngine.on('clockChanged', (clock) => this._broadcastClockUpdate(clock));
-    this.matchEngine.on('setsChanged', (sets) => this.broadcast({ type: 'SETS_UPDATE', sets }));
+    if (this.volleyballEngine) {
+      this.volleyballEngine.on('changed', (state) => this._publishVolleyball(state));
+    }
+    if (this.basketballEngine) {
+      this.basketballEngine.on('changed', (state) => this._publishBasketball(state));
+    }
+  }
+
+  _publishBasketball(state) {
+    try {
+      const snapshot = this.basketballGraphics.getSnapshot(state);
+      this.broadcast({ type: 'BASKETBALL_STATE_UPDATE', data: snapshot });
+      const announcement = snapshot.announcement;
+      if (announcement) {
+        if (announcement.id !== this._lastBasketballAnnouncementId || announcement.revision !== this._lastBasketballAnnouncementRevision) {
+          this.broadcast({ type: 'BASKETBALL_ANNOUNCEMENT_SHOW', data: announcement });
+          this._lastBasketballAnnouncementId = announcement.id;
+          this._lastBasketballAnnouncementRevision = announcement.revision;
+        }
+      } else if (this._lastBasketballAnnouncementId) {
+        this.broadcast({ type: 'BASKETBALL_ANNOUNCEMENT_CLEAR', revision: snapshot.announcementRevision });
+        this._lastBasketballAnnouncementId = null;
+        this._lastBasketballAnnouncementRevision = snapshot.announcementRevision;
+      }
+    } catch (error) {
+      console.error('[GraphicsEngine] Basketball broadcast failed:', error.message);
+    }
+  }
+
+  _publishVolleyball(state) {
+    try {
+      const snapshot = this.volleyballGraphics.getSnapshot(state);
+      this.broadcast({ type: 'VOLLEYBALL_STATE_UPDATE', data: snapshot });
+      const announcement = snapshot.announcement;
+      if (announcement) {
+        if (announcement.id !== this._lastVolleyballAnnouncementId || announcement.revision !== this._lastVolleyballAnnouncementRevision) {
+          this.broadcast({ type: 'VOLLEYBALL_ANNOUNCEMENT_SHOW', data: announcement });
+          this._lastVolleyballAnnouncementId = announcement.id;
+          this._lastVolleyballAnnouncementRevision = announcement.revision;
+        }
+      } else if (this._lastVolleyballAnnouncementId) {
+        this.broadcast({
+          type: 'VOLLEYBALL_ANNOUNCEMENT_CLEAR',
+          revision: snapshot.announcementRevision
+        });
+        this._lastVolleyballAnnouncementId = null;
+        this._lastVolleyballAnnouncementRevision = snapshot.announcementRevision;
+      }
+    } catch (error) {
+      // A graphics client or formatter failure must not roll back a committed match action.
+      console.error('[GraphicsEngine] Volleyball broadcast failed:', error.message);
+    }
   }
 
   _broadcastClockUpdate(clock) {
@@ -97,13 +164,87 @@ class GraphicsEngine extends EventEmitter {
   startServer() {
     const rootDir = path.resolve(__dirname, '..', '..');
 
+    const graphicsRoot = path.join(rootDir, 'graphics');
+    const host = this.config.get('graphics.host') || '127.0.0.1';
+    const configuredClients = this.config.get('graphics.allowedClients') || [];
+    const normalizedHost = String(host).toLowerCase();
+    const isLoopbackHost = normalizedHost === 'localhost' || normalizedHost === '::1' || normalizedHost.startsWith('127.');
+    const isWildcardHost = normalizedHost === '0.0.0.0' || normalizedHost === '::';
+    if (!Array.isArray(configuredClients) || configuredClients.some((address) => !this._normalizeAddress(address))) {
+      this.listenError = 'graphics.allowedClients must be an array of valid IP addresses.';
+      console.error('[GraphicsEngine] Server not started:', this.listenError);
+      return;
+    }
+    if (!isLoopbackHost && configuredClients.length === 0) {
+      this.listenError = 'Non-loopback graphics binding requires an explicit graphics.allowedClients IP allowlist.';
+      console.error('[GraphicsEngine] Server not started:', this.listenError);
+      return;
+    }
+    if (!isLoopbackHost && !isWildcardHost && net.isIP(host) === 0) {
+      this.listenError = 'LAN graphics.host must be a literal interface IP address.';
+      console.error('[GraphicsEngine] Server not started:', this.listenError);
+      return;
+    }
+    this.allowedGraphicsClients = new Set(configuredClients.map((address) => this._normalizeAddress(address)));
+    // Only these Browser Source folders and file types are ever served. Nothing
+    // outside graphics/ (config, source, credentials, node_modules) is reachable.
+    const allowedDirs = new Set(['score', 'goal', 'lower-third', 'replay', 'top-message', 'transitions', 'volleyball', 'basketball']);
+    const mimeTypes = {
+      '.html': 'text/html; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.js': 'application/javascript; charset=utf-8',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.mp3': 'audio/mpeg',
+      '.mp4': 'video/mp4'
+    };
+
+    const sendText = (res, status, body, extraHeaders = {}) => {
+      res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff', ...extraHeaders });
+      res.end(body);
+    };
+
+    // Returns the absolute file to serve for a request path, or null if not allowed.
+    const resolveAllowedFile = (rawPath) => {
+      let reqPath;
+      try {
+        reqPath = decodeURIComponent(rawPath);
+      } catch (e) {
+        return null;
+      }
+      if (reqPath.includes('\0') || reqPath.includes('\\') || reqPath.split('/').includes('..')) return null;
+
+      const parts = reqPath.split('/').filter(Boolean);
+      if (parts[0] !== 'graphics' || parts.length < 2) return null;
+      if (!allowedDirs.has(parts[1])) return null;
+
+      // /graphics/<name>/ and /graphics/<name> both map to index.html
+      const rest = parts.length === 2 ? ['index.html'] : parts.slice(2);
+      const localPath = path.resolve(graphicsRoot, parts[1], ...rest);
+      const allowedBase = path.resolve(graphicsRoot, parts[1]) + path.sep;
+      if (!localPath.startsWith(allowedBase)) return null;
+      if (!Object.prototype.hasOwnProperty.call(mimeTypes, path.extname(localPath).toLowerCase())) return null;
+      return localPath;
+    };
+
     this.httpServer = http.createServer((req, res) => {
-      // Basic static file server for /graphics and /media
-      const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-      let reqPath = parsedUrl.pathname;
+      if (!this._isAllowedGraphicsClient(req.socket.remoteAddress)) {
+        sendText(res, 404, '404 Not Found');
+        return;
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        sendText(res, 405, '405 Method Not Allowed', { Allow: 'GET, HEAD' });
+        return;
+      }
+
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      const reqPath = parsedUrl.pathname;
 
       if (reqPath === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' });
         res.end(`
           <!DOCTYPE html>
           <html>
@@ -117,6 +258,8 @@ class GraphicsEngine extends EventEmitter {
               <li><a href="/graphics/lower-third/" target="_blank">Lower Third & F1 Review (/graphics/lower-third/)</a></li>
               <li><a href="/graphics/top-message/" target="_blank">Top Message (/graphics/top-message/)</a></li>
               <li><a href="/graphics/replay/" target="_blank">Replay Overlay (/graphics/replay/)</a></li>
+              <li><a href="/graphics/volleyball/" target="_blank">Volleyball Scoreboard (/graphics/volleyball/)</a></li>
+              <li><a href="/graphics/basketball/" target="_blank">Basketball Scoreboard (/graphics/basketball/)</a></li>
             </ul>
           </body>
           </html>
@@ -124,43 +267,39 @@ class GraphicsEngine extends EventEmitter {
         return;
       }
 
-      // Safe path resolution
-      let localPath = path.join(rootDir, reqPath);
-
-      // Check if it's a directory, append index.html
-      if (fs.existsSync(localPath) && fs.statSync(localPath).isDirectory()) {
-        localPath = path.join(localPath, 'index.html');
-      }
-
-      if (!fs.existsSync(localPath) || !fs.statSync(localPath).isFile()) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('404 Not Found');
+      const localPath = resolveAllowedFile(reqPath);
+      if (!localPath || !fs.existsSync(localPath) || !fs.statSync(localPath).isFile()) {
+        sendText(res, 404, '404 Not Found');
         return;
       }
 
-      const ext = path.extname(localPath).toLowerCase();
-      const mimeTypes = {
-        '.html': 'text/html',
-        '.css': 'text/css',
-        '.js': 'application/javascript',
-        '.json': 'application/json',
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.svg': 'image/svg+xml',
-        '.mp3': 'audio/mpeg',
-        '.mp4': 'video/mp4'
-      };
-
-      const contentType = mimeTypes[ext] || 'application/octet-stream';
       res.writeHead(200, {
-        'Content-Type': contentType,
-        'Access-Control-Allow-Origin': '*'
+        'Content-Type': mimeTypes[path.extname(localPath).toLowerCase()],
+        'X-Content-Type-Options': 'nosniff'
       });
-
+      if (req.method === 'HEAD') {
+        res.end();
+        return;
+      }
       fs.createReadStream(localPath).pipe(res);
     });
 
-    this.wss = new WebSocket.Server({ server: this.httpServer });
+    this.httpServer.on('error', (err) => {
+      // e.g. EADDRINUSE when another BOS instance already owns the port. Do not crash the app.
+      this.listenError = err.message;
+      console.error(`[GraphicsEngine] Server error on port ${this.port}: ${err.message}`);
+    });
+
+    this.wss = new WebSocket.Server({
+      server: this.httpServer,
+      verifyClient: ({ req }) => this._isAllowedGraphicsClient(req.socket.remoteAddress)
+    });
+    this.wss.on('error', (err) => {
+      // ws forwards the HTTP server's bind error; its EventEmitter also requires a listener.
+      if (this.listenError === err.message) return;
+      this.listenError = err.message;
+      console.error(`[GraphicsEngine] WebSocket server error: ${err.message}`);
+    });
 
     this.wss.on('connection', (ws) => {
       this.connectedClients.add(ws);
@@ -179,7 +318,9 @@ class GraphicsEngine extends EventEmitter {
           active: this.replayOverlayActive,
           data: this.replayOverlayData
         },
-        scorebugVisible: this.scorebugVisible
+        scorebugVisible: this.scorebugVisible,
+        volleyball: this.volleyballGraphics ? this.volleyballGraphics.getSnapshot() : null,
+        basketball: this.basketballGraphics ? this.basketballGraphics.getSnapshot() : null
       };
       ws.send(JSON.stringify(initPayload));
 
@@ -202,10 +343,24 @@ class GraphicsEngine extends EventEmitter {
       });
     });
 
-    this.httpServer.listen(this.port, () => {
-      this.port = this.httpServer.address().port;
-      console.log(`[GraphicsEngine] Server listening at http://localhost:${this.port}`);
+    // Localhost-only by default; LAN clients must be explicitly allowlisted by IP.
+    this.httpServer.listen(this.port, host, () => {
+      console.log(`[GraphicsEngine] Server listening at http://${host}:${this.httpServer.address().port}`);
     });
+  }
+
+  _normalizeAddress(address) {
+    if (typeof address !== 'string') return null;
+    let normalized = address.trim().toLowerCase().replace(/%[^%]+$/, '');
+    if (normalized.startsWith('::ffff:')) normalized = normalized.slice(7);
+    return net.isIP(normalized) ? normalized : null;
+  }
+
+  _isAllowedGraphicsClient(address) {
+    const normalized = this._normalizeAddress(address);
+    if (!normalized) return false;
+    if (normalized === '::1' || normalized.startsWith('127.')) return true;
+    return !!this.allowedGraphicsClients && this.allowedGraphicsClients.has(normalized);
   }
 
   triggerTransition(data = {}) {
@@ -269,7 +424,7 @@ class GraphicsEngine extends EventEmitter {
   showTopMessage(data = {}) {
     this.topMessageActive = true;
     this.topMessageData = {
-      title: data.title || 'MESSAGE',
+      title: data.title || 'BROADCAST MESSAGE',
       subtitle: data.subtitle || '',
       badge: data.badge || '',
       value: data.value || '',

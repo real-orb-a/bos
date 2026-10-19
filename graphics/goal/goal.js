@@ -8,6 +8,35 @@
 
   let hideTimeout = null;
 
+  // Web Audio Synthesizer for Goal Chime / Horn
+  function playGoalHorn() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(440, now + 0.15);
+      osc.frequency.exponentialRampToValueAtTime(330, now + 0.4);
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 1.3);
+    } catch (e) {
+      // Audio might be muted or not allowed without user gesture
+    }
+  }
+
   function showGoal(data) {
     if (!data) return;
 
@@ -30,6 +59,8 @@
     // Reflow
     void container.offsetWidth;
     container.classList.add('active');
+
+    playGoalHorn();
 
     const durationMs = (data.duration || 3.0) * 1000;
     hideTimeout = setTimeout(() => {

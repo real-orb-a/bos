@@ -9,7 +9,6 @@
   const awayBarEl = document.getElementById('away-bar');
   const clockEl = document.getElementById('clock-display');
   const periodEl = document.getElementById('period-display');
-  const setsEl = document.getElementById('sets-display');
   const stoppageEl = document.getElementById('stoppage-display');
   const scorebug = document.getElementById('score-bug');
 
@@ -48,11 +47,6 @@
     if (data.clock) {
       applyClock(data.clock);
     }
-    if (data.sets) applySets(data.sets);
-  }
-
-  function applySets(sets) {
-    setsEl.textContent = `SETS ${sets.homeSets}-${sets.awaySets}`;
   }
 
   function applyClock(clock) {
@@ -90,7 +84,6 @@
           if (msg.score) {
             updateDisplay(msg.score, 'none');
           }
-          if (msg.score && msg.score.sets) applySets(msg.score.sets);
           setScorebugVisible(msg.scorebugVisible !== false);
         } else if (msg.type === 'SCORE_UPDATE') {
           updateDisplay(msg, msg.animation || 'pop', msg.changedTeam);
@@ -100,8 +93,6 @@
           if (msg.clock) {
             applyClock(msg.clock);
           }
-        } else if (msg.type === 'SETS_UPDATE') {
-          if (msg.sets) applySets(msg.sets);
         }
       } catch (err) {
         console.error('[ScoreBug] Message parse error:', err);

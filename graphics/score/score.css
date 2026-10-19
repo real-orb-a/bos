@@ -129,14 +129,6 @@ body {
   margin-top: 1px;
 }
 
-.sets-display {
-  font-size: 8px;
-  font-weight: 800;
-  color: rgba(255, 255, 255, 0.5);
-  letter-spacing: 0.8px;
-  margin-top: 2px;
-}
-
 /* Additional-time overlay: shown below the clock once the set time is reached */
 .stoppage-display {
   font-family: 'JetBrains Mono', monospace;

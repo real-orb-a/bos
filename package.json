@@ -6,7 +6,10 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node test.js"
+    "test": "node test.js",
+    "test:safety": "node --test test/phase0.test.js test/contract.test.js test/basketball.test.js test/basketball-graphics.test.js",
+    "test:sports": "node --test test/basketball.test.js test/basketball-graphics.test.js test/volleyball.test.js test/volleyball-store.test.js test/volleyball-graphics.test.js",
+    "test:ui": "node test/ui/ui.test.js"
   },
   "keywords": [
     "broadcast",

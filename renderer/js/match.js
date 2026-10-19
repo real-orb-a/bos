@@ -16,7 +16,7 @@ window.MatchModule = (function() {
   const homeGoalHotkey = document.getElementById('home-goal-hotkey');
   const awayGoalHotkey = document.getElementById('away-goal-hotkey');
   let selectedScoreValue = 1;
-  window.goalActionLabels = { home: 'GOAL', away: 'GOAL' };
+  const MAX_FEED_ITEMS = 100;
 
   const selectMatchState = document.getElementById('select-match-state');
   const selectPeriod = document.getElementById('select-period');
@@ -32,18 +32,6 @@ window.MatchModule = (function() {
   const selectAdditionalTimeMode = document.getElementById('select-additional-time-mode');
   const btnApproveAddedTime = document.getElementById('btn-approve-added-time');
   const inputRegulationMin = document.getElementById('input-regulation-min');
-  const regulationTimeControl = document.getElementById('regulation-time-control');
-  const startTimeControl = document.getElementById('start-time-control');
-  const additionalTimeModeControl = document.getElementById('additional-time-mode-control');
-  const stoppageTimeControl = document.getElementById('stoppage-time-control');
-  const inputBestOfSets = document.getElementById('input-best-of-sets');
-  const homeSetsWon = document.getElementById('home-sets-won');
-  const awaySetsWon = document.getElementById('away-sets-won');
-  const setTallyAdjustButtons = document.querySelectorAll('.set-tally-adjust');
-  const completedSetsList = document.getElementById('completed-sets-list');
-  const btnAwardSetHome = document.getElementById('btn-award-set-home');
-  const btnAwardSetAway = document.getElementById('btn-award-set-away');
-  const btnResetSets = document.getElementById('btn-reset-sets');
 
   const eventFeedList = document.getElementById('event-feed-list');
   const btnClearEvents = document.getElementById('btn-clear-events');
@@ -81,10 +69,13 @@ window.MatchModule = (function() {
     btnSubHome.addEventListener('click', () => window.bosAPI.score.subtractHome(selectedScoreValue));
     btnAddAway.addEventListener('click', () => window.bosAPI.score.addAway(selectedScoreValue));
     btnSubAway.addEventListener('click', () => window.bosAPI.score.subtractAway(selectedScoreValue));
-    btnResetScore.addEventListener('click', () => {
-      if (confirm('Reset match score and all completed sets?')) {
-        window.bosAPI.score.reset();
-      }
+    btnResetScore.addEventListener('click', async () => {
+      const ok = await window.BOSUI.confirm({
+        title: 'Reset score?',
+        message: 'This sets both teams back to 0 and cannot be undone.',
+        confirmLabel: 'RESET SCORE'
+      });
+      if (ok) window.bosAPI.score.reset();
     });
 
     btnToggleScorebug.addEventListener('click', async () => {
@@ -135,37 +126,6 @@ window.MatchModule = (function() {
       window.bosAPI.match.setClock({ regulationMinutes: mins });
     });
 
-    inputBestOfSets.addEventListener('change', async () => {
-      try {
-        const sets = await window.bosAPI.match.setBestOfSets(inputBestOfSets.value);
-        updateSetUI(sets);
-      } catch (err) {
-        window.alert(err.message);
-        const state = await window.bosAPI.match.getState();
-        updateSetUI(state.sets);
-      }
-    });
-
-    btnAwardSetHome.addEventListener('click', () => completeSet('home'));
-    btnAwardSetAway.addEventListener('click', () => completeSet('away'));
-    setTallyAdjustButtons.forEach(button => {
-      button.addEventListener('click', async () => {
-        try {
-          const sets = await window.bosAPI.match.adjustSetTally(
-            button.dataset.team,
-            Number(button.dataset.amount)
-          );
-          updateSetUI(sets);
-        } catch (err) {
-          window.alert(err.message);
-        }
-      });
-    });
-    btnResetSets.addEventListener('click', async () => {
-      if (!confirm('Reset all completed volleyball sets?')) return;
-      updateSetUI(await window.bosAPI.match.resetSets());
-    });
-
     inputStartTime.addEventListener('change', () => {
       const match = inputStartTime.value.trim().match(/^(\d{1,3}):(\d{2})$/);
       if (!match || Number(match[2]) > 59) {
@@ -181,10 +141,13 @@ window.MatchModule = (function() {
       window.bosAPI.match.clockToggle();
     });
 
-    btnClockReset.addEventListener('click', () => {
-      if (confirm('Reset match clock to 00:00?')) {
-        window.bosAPI.match.clockReset();
-      }
+    btnClockReset.addEventListener('click', async () => {
+      const ok = await window.BOSUI.confirm({
+        title: 'Reset match clock?',
+        message: 'The clock returns to its configured start time. Added time is cleared.',
+        confirmLabel: 'RESET CLOCK'
+      });
+      if (ok) window.bosAPI.match.clockReset();
     });
 
     // Clear events
@@ -199,6 +162,7 @@ window.MatchModule = (function() {
       await window.bosAPI.workflow.triggerGoal(team, { points: selectedScoreValue });
     } catch (err) {
       console.warn('Could not trigger goal sequence:', err.message);
+      window.BOSUI.toast('The goal sequence could not start. Check the OBS connection and try again.', { type: 'error' });
     }
   }
 
@@ -219,20 +183,10 @@ window.MatchModule = (function() {
       const scores = await window.bosAPI.score.get();
       updateScoreUI(scores);
 
-      const goalWorkflow = await window.bosAPI.config.get('goalWorkflow');
-      if (goalWorkflow) {
-        window.goalActionLabels = {
-          home: goalWorkflow.homeGoalActionLabel || 'GOAL',
-          away: goalWorkflow.awayGoalActionLabel || 'GOAL'
-        };
-        refreshGoalLabels();
-      }
-
       const matchState = await window.bosAPI.match.getState();
       if (matchState) {
         selectMatchState.value = matchState.matchState;
         updateClockUI(matchState.clock);
-        updateSetUI(matchState.sets);
       }
 
       const events = await window.bosAPI.events.get(30);
@@ -273,10 +227,6 @@ window.MatchModule = (function() {
       updateClockUI(clock);
     });
 
-    window.bosAPI.match.onSetsChanged((sets) => {
-      updateSetUI(sets);
-    });
-
     window.bosAPI.match.onStateChanged((data) => {
       selectMatchState.value = data.current;
     });
@@ -295,20 +245,16 @@ window.MatchModule = (function() {
     if (scores.home) {
       displayHomeScore.textContent = scores.home.score;
       cardHomeName.textContent = scores.home.name;
-      btnGarnetGoal.querySelector('.btn-text').textContent =
-        `${scores.home.name} ${window.goalActionLabels?.home || 'GOAL'}`;
+      btnGarnetGoal.querySelector('.btn-text').textContent = `${scores.home.name} GOAL`;
       updateTeamHotkey(btnGarnetGoal, homeGoalHotkey, scores.home, 'KeyG');
       applyTeamBranding('home', scores.home);
-      btnAwardSetHome.textContent = `AWARD SET TO ${scores.home.name}`;
     }
     if (scores.away) {
       displayAwayScore.textContent = scores.away.score;
       cardAwayName.textContent = scores.away.name;
-      btnTopazGoal.querySelector('.btn-text').textContent =
-        `${scores.away.name} ${window.goalActionLabels?.away || 'GOAL'}`;
+      btnTopazGoal.querySelector('.btn-text').textContent = `${scores.away.name} GOAL`;
       updateTeamHotkey(btnTopazGoal, awayGoalHotkey, scores.away, 'KeyT');
       applyTeamBranding('away', scores.away);
-      btnAwardSetAway.textContent = `AWARD SET TO ${scores.away.name}`;
     }
   }
 
@@ -319,124 +265,64 @@ window.MatchModule = (function() {
     button.title = `Goal hotkey: ${pill.textContent}`;
   }
 
-  function refreshGoalLabels() {
-    btnGarnetGoal.querySelector('.btn-text').textContent =
-      `${cardHomeName.textContent} ${window.goalActionLabels.home}`;
-    btnTopazGoal.querySelector('.btn-text').textContent =
-      `${cardAwayName.textContent} ${window.goalActionLabels.away}`;
-  }
-
   function applyTeamBranding(side, team) {
     const goalButton = side === 'home' ? btnGarnetGoal : btnTopazGoal;
     const teamLabel = side === 'home' ? cardHomeName : cardAwayName;
     const color = team.color || (side === 'home' ? '#e11d48' : '#eab308');
     goalButton.style.setProperty('--team-color', color);
     goalButton.style.setProperty('--team-secondary-color', team.secondaryColor || color);
+    goalButton.style.setProperty('--team-contrast', readableTextColor(color));
     teamLabel.style.setProperty('--team-color', color);
+  }
+
+  // Pick black or white text so any house colour (e.g. Topaz yellow) stays legible.
+  function readableTextColor(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return '#ffffff';
+    const n = parseInt(m[1], 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luminance > 0.19 ? '#14110a' : '#ffffff';
   }
 
   function updateClockUI(clock) {
     if (!clock) return;
-    const noTime = clock.mode === 'none';
     masterClockDisplay.textContent = clock.formatted;
     masterPeriodDisplay.textContent = `${clock.period.toUpperCase()} ${clock.stoppageTime}`;
     selectPeriod.value = clock.period;
-    if (!noTime && document.activeElement !== inputStartTime) inputStartTime.value = clock.formatted;
-    regulationTimeControl.hidden = noTime;
-    startTimeControl.hidden = noTime;
-    additionalTimeModeControl.hidden = noTime;
-    stoppageTimeControl.hidden = noTime;
+    if (document.activeElement !== inputStartTime) inputStartTime.value = clock.formatted;
 
     // Timer mode + set time (don't clobber the input while the operator is typing)
     if (clock.mode) selectTimerMode.value = clock.mode;
-        if (clock.additionalTimeMode) selectAdditionalTimeMode.value = clock.additionalTimeMode;
-        btnApproveAddedTime.classList.toggle('hidden', !clock.awaitingStoppageApproval);
-        if (clock.awaitingStoppageApproval) {
-          btnApproveAddedTime.textContent = `GO AHEAD +${clock.stoppageMinutes} MIN`;
-        }
+    if (clock.additionalTimeMode) selectAdditionalTimeMode.value = clock.additionalTimeMode;
+    btnApproveAddedTime.classList.toggle('hidden', !clock.awaitingStoppageApproval);
+    if (clock.awaitingStoppageApproval) {
+      btnApproveAddedTime.textContent = `GO AHEAD +${clock.stoppageMinutes} MIN`;
+    }
     if (clock.regulationSeconds && document.activeElement !== inputRegulationMin) {
       inputRegulationMin.value = Math.round(clock.regulationSeconds / 60);
     }
 
     // Additional-time overlay below the frozen clock (00:00 counting up to N:00)
-    if (!noTime && clock.inStoppage && clock.stoppageDisplay) {
+    if (clock.inStoppage && clock.stoppageDisplay) {
       masterStoppageDisplay.textContent = clock.stoppageDisplay;
       masterStoppageDisplay.classList.remove('hidden');
     } else {
       masterStoppageDisplay.classList.add('hidden');
     }
 
-    // Toggle button icon
-    if (clock.running) {
-      btnClockToggle.innerHTML = `<svg class="icon" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
-      masterClockDisplay.style.color = '#4ade80';
-    } else {
-      btnClockToggle.innerHTML = `<svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-      masterClockDisplay.style.color = '#38bdf8';
-    }
-    btnClockToggle.disabled = noTime || !!clock.awaitingStoppageApproval;
-    btnClockReset.disabled = noTime;
+    // Toggle button icon + running colour (colour comes from CSS, not inline styles)
+    btnClockToggle.innerHTML = clock.running
+      ? '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>'
+      : '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7z"/></svg>';
+    masterClockDisplay.classList.toggle('is-running', !!clock.running);
+    btnClockToggle.disabled = !!clock.awaitingStoppageApproval;
     btnClockToggle.title = clock.awaitingStoppageApproval
       ? 'Use GO AHEAD to start additional time'
-      : noTime ? 'Clock is disabled in no-time mode' : 'Spacebar: Start/Pause';
-  }
-
-  async function completeSet(winner) {
-    try {
-      const sets = await window.bosAPI.match.completeSet(winner);
-      updateSetUI(sets);
-      const completedSet = sets.completedSets[sets.completedSets.length - 1];
-      await window.bosAPI.graphics.showLowerThird({
-        title: `SET WON BY: ${completedSet.team}`,
-        duration: 5
-      });
-    } catch (err) {
-      window.alert(err.message);
-    }
-  }
-
-  async function removeCompletedSet(setNumber) {
-    if (!window.confirm(`Remove Set ${setNumber} from the results?`)) return;
-    try {
-      updateSetUI(await window.bosAPI.match.removeCompletedSet(setNumber));
-    } catch (err) {
-      window.alert(err.message);
-    }
-  }
-
-  function updateSetUI(sets) {
-    if (!sets) return;
-    inputBestOfSets.value = sets.bestOfSets;
-    homeSetsWon.textContent = sets.homeSets;
-    awaySetsWon.textContent = sets.awaySets;
-    setTallyAdjustButtons.forEach(button => {
-      const teamTally = button.dataset.team === 'home' ? sets.homeSets : sets.awaySets;
-      button.disabled = button.dataset.amount === '-1' && teamTally === 0;
-    });
-    const completed = sets.completedSets || [];
-    completedSetsList.replaceChildren();
-    if (!completed.length) {
-      completedSetsList.textContent = 'No sets completed';
-    } else {
-      completed.forEach(set => {
-        const row = document.createElement('div');
-        row.className = 'completed-set-entry';
-        const label = document.createElement('span');
-        const points = set.points ? ` (${set.points.home}–${set.points.away})` : '';
-        label.textContent = `SET ${set.number}: ${set.team}${points}`;
-        const removeButton = document.createElement('button');
-        removeButton.type = 'button';
-        removeButton.className = 'text-btn completed-set-remove';
-        removeButton.textContent = 'REMOVE';
-        removeButton.setAttribute('aria-label', `Remove set ${set.number}`);
-        removeButton.addEventListener('click', () => removeCompletedSet(set.number));
-        row.append(label, removeButton);
-        completedSetsList.append(row);
-      });
-    }
-    const seriesComplete = completed.length >= sets.bestOfSets;
-    btnAwardSetHome.disabled = seriesComplete;
-    btnAwardSetAway.disabled = seriesComplete;
+      : 'Spacebar: Start/Pause';
   }
 
   function renderEventFeed(events) {
@@ -454,6 +340,8 @@ window.MatchModule = (function() {
 
     const div = createEventItemNode(evt);
     eventFeedList.insertBefore(div, eventFeedList.firstChild);
+    // Keep the DOM small during long matches (the main process keeps the full log).
+    while (eventFeedList.children.length > MAX_FEED_ITEMS) eventFeedList.removeChild(eventFeedList.lastChild);
   }
 
   function appendEventItem(evt) {
@@ -465,13 +353,22 @@ window.MatchModule = (function() {
     const div = document.createElement('div');
     div.className = 'event-item';
     const isGoal = evt.type === 'GOAL';
-    div.innerHTML = `
-      <span class="event-time">${evt.displayTime || ''}</span>
-      <span class="event-type-badge ${isGoal ? 'goal' : ''}">${evt.type}</span>
-      <span style="font-weight: 700; font-size: 11px;">${evt.team ? evt.team : (evt.time || evt.period || '')}</span>
-    `;
+
+    const time = document.createElement('span');
+    time.className = 'event-time';
+    time.textContent = evt.displayTime || '';
+
+    const badge = document.createElement('span');
+    badge.className = `event-type-badge${isGoal ? ' goal' : ''}`;
+    badge.textContent = evt.type;
+
+    const meta = document.createElement('span');
+    meta.className = 'event-meta';
+    meta.textContent = evt.team ? evt.team : (evt.time || evt.period || '');
+
+    div.append(time, badge, meta);
     return div;
   }
 
-  return { init, triggerGoalSequence, handleGoalHotkey, refreshGoalLabels };
+  return { init, triggerGoalSequence, handleGoalHotkey };
 })();

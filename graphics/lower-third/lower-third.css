@@ -15,6 +15,12 @@ body {
   user-select: none;
 }
 
+/*
+ * F1 broadcast lower-third (styled after the reference race broadcast banner):
+ * a skewed dark banner with an accent stripe on the left, a bold accent-coloured
+ * title, a small caps subtitle underneath, and a right-hand highlight block
+ * (small white label + big accent value — the "UP TO / 2ND" slot in the reference).
+ */
 .lower-third {
   position: absolute;
   transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
@@ -107,10 +113,6 @@ body {
   border-left: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.lt-side.empty {
-  display: none;
-}
-
 .lt-side-label {
   font-size: 10px;
   font-weight: 800;
@@ -132,3 +134,4 @@ body {
 .lt-side-value:empty {
   display: none;
 }
+

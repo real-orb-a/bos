@@ -12,7 +12,9 @@ function registerIpcHandlers({
   eventLogger,
   replayEngine,
   graphicsEngine,
-  goalWorkflow
+  goalWorkflow,
+  volleyballEngine,
+  basketballEngine
 }) {
   const sendToRenderer = (channel, ...args) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -21,8 +23,11 @@ function registerIpcHandlers({
   };
 
   // Bind Subsystem Events to Renderer
+  obsClient.on('connecting', () => sendToRenderer('obs:statusChanged', obsClient.getStatus()));
   obsClient.on('connected', (status) => sendToRenderer('obs:statusChanged', obsClient.getStatus()));
   obsClient.on('disconnected', () => sendToRenderer('obs:statusChanged', obsClient.getStatus()));
+  obsClient.on('streamStatusChanged', () => sendToRenderer('obs:statusChanged', obsClient.getStatus()));
+  obsClient.on('recordStatusChanged', () => sendToRenderer('obs:statusChanged', obsClient.getStatus()));
   obsClient.on('sceneChanged', (scene) => sendToRenderer('obs:sceneChanged', scene));
   obsClient.on('ping', (latency) => sendToRenderer('obs:ping', latency));
 
@@ -31,7 +36,6 @@ function registerIpcHandlers({
 
   matchEngine.on('clockTick', (clock) => sendToRenderer('match:clockTick', clock));
   matchEngine.on('clockChanged', (clock) => sendToRenderer('match:clockChanged', clock));
-  matchEngine.on('setsChanged', (sets) => sendToRenderer('match:setsChanged', sets));
   matchEngine.on('stateChanged', (state) => sendToRenderer('match:stateChanged', state));
   matchEngine.on('temporaryStateChanged', (state) => sendToRenderer('match:tempStateChanged', state));
 
@@ -46,6 +50,12 @@ function registerIpcHandlers({
   goalWorkflow.on('workflowStep', (data) => sendToRenderer('workflow:step', data));
   goalWorkflow.on('workflowCompleted', (data) => sendToRenderer('workflow:completed', data));
   goalWorkflow.on('workflowAborted', () => sendToRenderer('workflow:aborted'));
+  if (volleyballEngine) {
+    volleyballEngine.on('changed', (state) => sendToRenderer('volleyball:changed', state));
+  }
+  if (basketballEngine) {
+    basketballEngine.on('changed', (state) => sendToRenderer('basketball:changed', state));
+  }
 
   // --- OBS IPC Handlers ---
   ipcMain.handle('obs:connect', async () => {
@@ -79,11 +89,6 @@ function registerIpcHandlers({
   ipcMain.handle('match:setAdditionalTimeMode', (_, mode) => matchEngine.setAdditionalTimeMode(mode));
   ipcMain.handle('match:approveAdditionalTime', () => matchEngine.approveAdditionalTime());
   ipcMain.handle('match:setPeriod', (_, period) => matchEngine.setPeriod(period));
-  ipcMain.handle('match:setBestOfSets', (_, count) => matchEngine.setBestOfSets(count));
-  ipcMain.handle('match:adjustSetTally', (_, { team, amount }) => matchEngine.adjustSetTally(team, amount));
-  ipcMain.handle('match:completeSet', (_, winner) => matchEngine.completeSet(winner));
-  ipcMain.handle('match:removeCompletedSet', (_, setNumber) => matchEngine.removeCompletedSet(setNumber));
-  ipcMain.handle('match:resetSets', () => matchEngine.resetSets());
 
   // --- Score IPC Handlers ---
   ipcMain.handle('score:get', () => scoreManager.getScore());
@@ -92,7 +97,7 @@ function registerIpcHandlers({
   ipcMain.handle('score:addAway', (_, amount) => scoreManager.addAway(amount));
   ipcMain.handle('score:subtractAway', (_, amount) => scoreManager.subtractAway(amount));
   ipcMain.handle('score:set', (_, { home, away }) => scoreManager.setScore(home, away));
-  ipcMain.handle('score:reset', () => matchEngine.resetScoreAndSets());
+  ipcMain.handle('score:reset', () => scoreManager.resetScore());
   ipcMain.handle('score:updateTeams', (_, teamsData) => scoreManager.updateTeams(teamsData));
 
   // --- Events IPC Handlers ---
@@ -132,10 +137,45 @@ function registerIpcHandlers({
 
   // --- Goal Workflow IPC Handlers ---
   ipcMain.handle('goal:trigger', async (_, { team, options }) => await goalWorkflow.triggerGoal(team, options));
-  ipcMain.handle('goal:goToReplay', () => goalWorkflow.goToReplay());
-  ipcMain.handle('goal:continueToLive', async () => await goalWorkflow.continueToLive());
+  ipcMain.handle('goal:continueToLive', () => goalWorkflow.continueToLive());
   ipcMain.handle('goal:abort', async () => await goalWorkflow.abort());
   ipcMain.handle('goal:getStatus', () => goalWorkflow.getStatus());
+
+  // --- Volleyball Domain IPC Handlers ---
+  ipcMain.handle('volleyball:getState', () => volleyballEngine.getState());
+  ipcMain.handle('volleyball:createMatch', (_, setup) => volleyballEngine.createMatch(setup));
+  ipcMain.handle('volleyball:startMatch', () => volleyballEngine.startMatch());
+  ipcMain.handle('volleyball:scorePoint', (_, teamId) => volleyballEngine.scorePoint(teamId));
+  ipcMain.handle('volleyball:undoLastPoint', (_, reason) => volleyballEngine.undoLastPoint(reason));
+  ipcMain.handle('volleyball:recordSetResult', (_, options) => volleyballEngine.recordSetResult(options || {}));
+  ipcMain.handle('volleyball:advanceSet', () => volleyballEngine.advanceSet());
+  ipcMain.handle('volleyball:startTimeout', (_, { teamId, options } = {}) => volleyballEngine.startTimeout(teamId, options || {}));
+  ipcMain.handle('volleyball:endTimeout', (_, reason) => volleyballEngine.endTimeout(reason));
+  ipcMain.handle('volleyball:cancelTimeout', (_, reason) => volleyballEngine.cancelTimeout(reason));
+  ipcMain.handle('volleyball:resolveTimeoutRecovery', (_, { choice, reason } = {}) => volleyballEngine.resolveTimeoutRecovery(choice, reason));
+  ipcMain.handle('volleyball:switchSides', (_, options) => volleyballEngine.switchSides(options || {}));
+  ipcMain.handle('volleyball:resolveSideSwitchPrompt', (_, { action, options } = {}) => volleyballEngine.resolveSideSwitchPrompt(action, options || {}));
+  ipcMain.handle('volleyball:undoLastSideSwitch', (_, reason) => volleyballEngine.undoLastSideSwitch(reason));
+  ipcMain.handle('volleyball:setAnnouncementLive', (_, { text, requestId } = {}) => volleyballEngine.setAnnouncementLive(text, requestId));
+  ipcMain.handle('volleyball:clearAnnouncement', (_, announcementId) => volleyballEngine.clearAnnouncement(announcementId));
+  ipcMain.handle('volleyball:reopenCompletedMatch', (_, { matchId, options } = {}) => volleyballEngine.reopenCompletedMatch(matchId, options || {}));
+  ipcMain.handle('volleyball:correctSetScore', (_, { setNumber, points, options } = {}) => volleyballEngine.correctSetScore(setNumber, points, options || {}));
+  ipcMain.handle('volleyball:finalizeCorrection', (_, options) => volleyballEngine.finalizeCorrection(options || {}));
+
+  // --- Basketball Domain IPC Handlers ---
+  ipcMain.handle('basketball:getState', () => basketballEngine.getState());
+  ipcMain.handle('basketball:createMatch', (_, setup) => basketballEngine.createMatch(setup));
+  ipcMain.handle('basketball:toggleClock', () => basketballEngine.toggleClock());
+  ipcMain.handle('basketball:setClock', (_, seconds) => basketballEngine.setClock(seconds));
+  ipcMain.handle('basketball:setPeriod', (_, period) => basketballEngine.setPeriod(period));
+  ipcMain.handle('basketball:addScore', (_, { side, points } = {}) => basketballEngine.addScore(side, points));
+  ipcMain.handle('basketball:adjustScore', (_, { side, delta } = {}) => basketballEngine.adjustScore(side, delta));
+  ipcMain.handle('basketball:addFoul', (_, side) => basketballEngine.addFoul(side));
+  ipcMain.handle('basketball:callTimeout', (_, side) => basketballEngine.callTimeout(side));
+  ipcMain.handle('basketball:endTimeout', () => basketballEngine.endTimeout());
+  ipcMain.handle('basketball:setShotClock', (_, seconds) => basketballEngine.setShotClock(seconds));
+  ipcMain.handle('basketball:setAnnouncement', (_, text) => basketballEngine.setAnnouncement(text));
+  ipcMain.handle('basketball:clearAnnouncement', (_, id) => basketballEngine.clearAnnouncement(id));
 
   // --- Master Safety / Return to Live ---
   ipcMain.handle('system:emergencyAbort', async () => {
@@ -148,14 +188,42 @@ function registerIpcHandlers({
   });
 
   // --- Config IPC Handlers ---
-  ipcMain.handle('config:get', (_, key) => configManager.get(key));
+  // The OBS password never travels to the renderer. config:get returns an empty
+  // password plus a `passwordSet` flag; an empty password on save means "keep the
+  // stored one". (To remove a password, edit config/bos.json directly.)
+  const redactConfig = (value) => {
+    if (!value || typeof value !== 'object') return value;
+    const copy = JSON.parse(JSON.stringify(value));
+    if (copy.obs && typeof copy.obs === 'object') {
+      copy.obs.passwordSet = !!(copy.obs.password);
+      copy.obs.password = '';
+    }
+    return copy;
+  };
+
+  ipcMain.handle('config:get', (_, key) => {
+    const value = configManager.get(key);
+    if (!key) return redactConfig(value);
+    if (key === 'obs') return redactConfig({ obs: value }).obs;
+    if (key === 'obs.password') return '';
+    return value;
+  });
   ipcMain.handle('config:set', (_, { key, value }) => {
-    configManager.set(key, value);
-    return true;
+    if (key === 'obs.password' && !value) return true; // empty = unchanged
+    return configManager.set(key, value) !== false;
   });
   ipcMain.handle('config:updateAll', (_, newConfig) => {
-    configManager.updateAll(newConfig);
-    return true;
+    if (newConfig && newConfig.obs && typeof newConfig.obs === 'object') {
+      const merged = { ...newConfig.obs };
+      delete merged.passwordSet;
+      if (!merged.password) {
+        const existing = configManager.get('obs.password');
+        if (existing) merged.password = existing;
+        else delete merged.password;
+      }
+      newConfig = { ...newConfig, obs: merged };
+    }
+    return configManager.updateAll(newConfig) !== false;
   });
 }
 

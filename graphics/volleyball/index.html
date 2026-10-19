@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOS Volleyball Scoreboard</title>
+  <link rel="stylesheet" href="volleyball.css">
+</head>
+<body>
+  <main class="scoreboard hidden" id="scoreboard" aria-live="off">
+    <header class="match-meta"><span id="competition-name"></span><span id="match-name"></span></header>
+    <section class="teams" aria-label="Volleyball score">
+      <article class="team" id="left-team">
+        <span class="side-label">LEFT</span><strong class="team-name" id="left-name"></strong>
+        <span class="sets-won" id="left-sets">0 SETS</span><strong class="points" id="left-points">0</strong>
+        <span class="serve-indicator hidden" id="left-serving">SERVING</span>
+      </article>
+      <span class="score-divider" aria-hidden="true">:</span>
+      <article class="team" id="right-team">
+        <span class="side-label">RIGHT</span><strong class="team-name" id="right-name"></strong>
+        <span class="sets-won" id="right-sets">0 SETS</span><strong class="points" id="right-points">0</strong>
+        <span class="serve-indicator hidden" id="right-serving">SERVING</span>
+      </article>
+    </section>
+    <footer class="set-meta"><span id="set-label"></span><span id="match-status"></span><span class="timeout-label hidden" id="timeout-label"></span></footer>
+  </main>
+  <aside class="announcement hidden" id="announcement" aria-live="off"><p id="announcement-text"></p></aside>
+  <script src="volleyball.js"></script>
+</body>
+</html>

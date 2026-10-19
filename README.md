@@ -92,6 +92,23 @@ bos/
 
 ## Getting Started
 
+### 0. Install and configure
+
+Requirements: Windows 10/11 (or macOS/Linux for development), Node.js 20 or newer, and OBS Studio 28+ with the WebSocket server enabled.
+
+```bash
+npm install            # installs Electron, obs-websocket-js and ws
+```
+
+Configuration lives in `config/bos.json`. That file is **not** shipped in the release archive (it can hold your OBS password).
+If you already have a `config/bos.json`, copy it into the new `config/` folder. Otherwise either copy
+`config/bos.example.json` to `config/bos.json`, or just start BOS and fill in **Settings → OBS & Replay**
+(host, port, password). The OBS password is never displayed back in the UI: leaving the field blank keeps the saved one.
+
+If `config/bos.json` is ever unreadable, BOS keeps a copy of it as `config/bos.json.corrupt-<time>` and tells you on start-up; it will never silently overwrite it.
+
+The graphics server listens on `127.0.0.1:8088` by default. LAN access is opt-in: bind to a specific local interface address and list the exact OBS client IPs in `graphics.allowedClients`, for example `"graphics": { "host": "192.168.1.10", "allowedClients": ["192.168.1.25"] }`. Non-loopback HTTP and WebSocket peers are filtered by socket IP; an `Origin` header is not used as authentication. This is an IP access list for a trusted, firewall-restricted broadcast LAN, not encryption or cryptographic identity. Do not expose the port to untrusted networks; use a secured tunnel/VPN if traffic crosses one.
+
 ### 1. Launch BOS
 ```bash
 npm start
@@ -115,6 +132,10 @@ Add Browser Sources in OBS pointing to the BOS graphics server (`http://localhos
 - **Goal Celebration**: `http://localhost:8088/graphics/goal/` (Width: 1920, Height: 1080)
 - **Replay Watermark**: `http://localhost:8088/graphics/replay/` (Width: 1920, Height: 1080)
 - **Custom Stinger Wipe**: `http://localhost:8088/graphics/transitions/` (Width: 1920, Height: 1080)
+- **Volleyball Scoreboard**: `http://localhost:8088/graphics/volleyball/` (Width: 1920, Height: 1080)
+- **Basketball Scoreboard**: `http://localhost:8088/graphics/basketball/` (Width: 1920, Height: 1080)
+
+Basketball has its own match setup and control room. Scores, periods, fouls, timeouts, the game clock, shot clock, and on-screen announcements are persisted separately from Football under Electron's user-data directory. The game clock starts and pauses independently; ending a timeout does not start it automatically. On a storage-recovery error, match changes are disabled to protect the existing data.
 
 ---
 
@@ -187,3 +208,13 @@ When the operator presses **GARNET GOAL** or **TOPAZ GOAL**:
 6. **Return to Live**: Returns the program to the LIVE scene.
 
 *At any point, the operator can click **RETURN TO LIVE** (`L`) or **SKIP SEQUENCE** to safely override and restore live broadcast output.*
+
+## Testing
+
+```bash
+npm test               # original backend smoke test
+npm run test:safety    # config recovery, OBS diagnostics, graphics-server allowlist, IPC redaction, frontend/backend contract
+npm run test:ui        # renderer tests in headless Chromium (needs the optional `playwright` package; skipped if absent)
+```
+
+See `TEST_REPORT.md` for what has and has not been verified, and `CHANGELOG.md` for what changed.

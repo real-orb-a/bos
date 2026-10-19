@@ -16,9 +16,9 @@ const EventEmitter = require('events');
  * `replay.hotkeyName` and `replay.contextName` are sent as separate fields in
  * `TriggerHotkeyByName`. Each capture source may override either value.
  *
- * BOS does not select saved files, load OBS media sources, or control playback.
- * Goal workflow can switch between the configured REPLAY and LIVE scenes, but the
- * OBS scene/plugin setup is responsible for presenting and playing the footage.
+ * Replay AIRING (selecting the saved file, loading an OBS media source, switching
+ * to the REPLAY scene, playing, returning to LIVE) is deliberately NOT implemented
+ * in this phase — `airReplay()` exists only as the future extension point.
  */
 class ReplayEngine extends EventEmitter {
   constructor(configManager, obsClient) {

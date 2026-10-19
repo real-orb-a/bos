@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOS Basketball Scoreboard</title>
+  <link rel="stylesheet" href="basketball.css">
+</head>
+<body>
+  <main class="scoreboard hidden" id="scoreboard" aria-live="off">
+    <div class="scoreboard-shell">
+      <aside class="team-panel team-home" id="home-panel">
+        <span class="team-kicker">HOME</span>
+        <div class="team-row">
+          <span class="team-chip" id="home-chip">HOME</span>
+          <strong class="team-name" id="home-name">GARNET</strong>
+        </div>
+        <strong class="team-score" id="home-score">0</strong>
+      </aside>
+
+      <div class="center-panel">
+        <span class="divider"></span>
+        <div class="game-meta">
+          <span id="period-display">Q1</span>
+          <strong id="clock-display">00:00</strong>
+        </div>
+        <div class="shot-clock" id="shot-clock">24</div>
+      </div>
+
+      <aside class="team-panel team-away" id="away-panel">
+        <span class="team-kicker">AWAY</span>
+        <div class="team-row">
+          <strong class="team-name" id="away-name">TOPAZ</strong>
+          <span class="team-chip" id="away-chip">AWAY</span>
+        </div>
+        <strong class="team-score" id="away-score">0</strong>
+      </aside>
+    </div>
+  </main>
+
+  <aside class="announcement hidden" id="announcement" aria-live="off">
+    <p id="announcement-text"></p>
+  </aside>
+
+  <script src="basketball.js"></script>
+</body>
+</html>

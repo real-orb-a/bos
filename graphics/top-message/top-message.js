@@ -4,21 +4,20 @@
   const subtitleEl = document.getElementById('tm-subtitle');
   const badgeText = document.getElementById('badge-text');
   const valueEl = document.getElementById('tm-value');
-  const sideEl = document.querySelector('.tm-side');
   let hideTimeout = null;
 
   function showTopMessage(data) {
     if (!data) return;
 
-    titleEl.textContent = data.title || 'MESSAGE';
+    titleEl.textContent = data.title || 'BROADCAST MESSAGE';
     subtitleEl.textContent = data.subtitle || '';
     subtitleEl.style.display = data.subtitle ? 'block' : 'none';
 
     // Right-hand highlight block: small label (badge) + big accent value.
-    badgeText.textContent = data.badge || '';
+    badgeText.textContent = data.style === 'alert' ? 'OFFICIAL NOTICE' : (data.badge || 'BROADCAST');
     valueEl.textContent = data.value || '';
-    sideEl.classList.toggle('empty', !badgeText.textContent && !valueEl.textContent);
 
+    // House colour accent drives the accent stripe, title and highlight value.
     const accent = data.color || '';
     if (accent) document.documentElement.style.setProperty('--tm-accent', accent);
 
@@ -39,7 +38,7 @@
     tm.classList.remove('hidden');
 
     if (hideTimeout) clearTimeout(hideTimeout);
-    const durationMs = (data.duration === undefined ? 5 : data.duration) * 1000;
+    const durationMs = (data.duration || 5) * 1000;
     if (durationMs > 0) {
       hideTimeout = setTimeout(() => {
         tm.classList.add('hidden');

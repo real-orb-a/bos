@@ -12,14 +12,14 @@ class LowerThirdGraphicsController extends EventEmitter {
   }
 
   show(data = {}) {
-    const title = data.title || 'MESSAGE';
-    const subtitle = data.subtitle || '';
+    const title = data.title || 'UNDER REVIEW';
+    const subtitle = data.subtitle || 'DECISION PENDING';
     const duration = data.duration !== undefined ? data.duration : (this.config.get('graphics.defaultLowerThirdDuration') || 5);
     const position = data.position || 'bottom-left';
     const animation = data.animation || this.config.get('graphics.animationStyle') || 'slide-in';
     const style = 'standard';
     const color = data.color || this.config.get('graphics.lowerThirdColor') || ''; // house accent
-    const badge = data.badge || '';
+    const badge = data.badge || ''; // right-block label (defaults to 'BROADCAST' in the overlay)
     const value = data.value || ''; // right-block highlight value (e.g. "+2ND")
 
     this._clearTimers();
@@ -36,7 +36,6 @@ class LowerThirdGraphicsController extends EventEmitter {
       color,
       timestamp: Date.now()
     };
-    this.remainingSeconds = duration > 0 ? duration : 0;
 
     if (duration > 0) {
       this.remainingSeconds = duration;

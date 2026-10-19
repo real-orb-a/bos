@@ -1,0 +1,151 @@
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body {
+  background: transparent;
+  color: #eff3f5;
+  font-family: "Segoe UI", Arial, sans-serif;
+  user-select: none;
+}
+.hidden { display: none !important; }
+.scoreboard {
+  position: absolute;
+  left: 50%;
+  bottom: 6.5vh;
+  width: min(1120px, calc(100vw - 64px));
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, rgba(15,19,22,0.97), rgba(8,10,12,0.96));
+  border: 1px solid rgba(255,255,255,0.18);
+  border-top: 4px solid #f1f5f9;
+  box-shadow: 0 26px 44px rgba(0,0,0,0.48);
+  overflow: hidden;
+}
+.match-meta, .set-meta {
+  display: flex; align-items: center; gap: 16px;
+  color: #cfd7db; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.match-meta {
+  justify-content: space-between;
+  padding: 12px 20px 10px;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px minmax(0, 1fr);
+  align-items: stretch;
+}
+.team {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 18px;
+  padding: 18px 18px 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+}
+.team:first-child { border-right: 1px solid rgba(255,255,255,0.12); }
+.team:last-child { border-left: 1px solid rgba(255,255,255,0.12); }
+.team::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, #8fd3ff, #d4f2ff);
+}
+.team:last-child::before { background: linear-gradient(180deg, #ffbf69, #ffdca3); }
+.side-label {
+  grid-column: 1 / -1;
+  color: #9aa7ac;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+.team-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.sets-won {
+  color: #d4dbe0;
+  font-size: 11px;
+  white-space: nowrap;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.points {
+  min-width: 58px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(34px, 2.4vw, 48px);
+  font-weight: 800;
+  line-height: 1;
+}
+.score-divider {
+  align-self: center;
+  text-align: center;
+  color: #8a9398;
+  font-size: 26px;
+  font-weight: 700;
+}
+.serve-indicator {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255,255,255,0.28);
+  background: rgba(255,255,255,0.04);
+  color: #f5f7f8;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.set-meta {
+  justify-content: center;
+  padding: 10px 18px 12px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+.timeout-label {
+  color: #f7d27a;
+}
+.announcement {
+  position: absolute;
+  top: 7vh;
+  left: 50%;
+  width: min(1200px, calc(100vw - 64px));
+  transform: translateX(-50%);
+  padding: 18px 26px;
+  border-left: 4px solid #f1f5f9;
+  background: rgba(10,12,14,0.97);
+  box-shadow: 0 18px 30px rgba(0,0,0,0.38);
+}
+.announcement p {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(18px, 2vw, 30px);
+  font-weight: 650;
+  line-height: 1.28;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .scoreboard { width: calc(100vw - 24px); }
+  .match-meta, .set-meta { font-size: 10px; letter-spacing: 0.08em; }
+  .team { grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; padding-inline: 10px; }
+  .team-name { font-size: 18px; }
+  .sets-won { grid-column: 1; font-size: 10px; }
+  .points { grid-column: 2; grid-row: 2 / 4; min-width: 40px; font-size: 30px; }
+  .announcement { width: calc(100vw - 24px); padding: 14px; }
+  .announcement p { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

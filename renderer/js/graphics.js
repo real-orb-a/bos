@@ -35,8 +35,8 @@ window.GraphicsModule = (function() {
     });
 
     btnQueueLowerthird.addEventListener('click', () => {
-      const item = getFormData();
-      window.bosAPI.graphics.enqueue(item);
+      const item = getValidatedFormData();
+      if (item) window.bosAPI.graphics.enqueue(item);
     });
 
     btnClearQueue.addEventListener('click', () => {
@@ -45,12 +45,24 @@ window.GraphicsModule = (function() {
 
   }
 
+  // A blank title used to be silently replaced with "UNDER REVIEW" and sent to air.
+  function getValidatedFormData() {
+    if (!inputLtTitle.value.trim()) {
+      inputLtTitle.setAttribute('aria-invalid', 'true');
+      inputLtTitle.focus();
+      window.BOSUI.toast('Enter a title before showing or queueing a message.', { type: 'warning' });
+      return null;
+    }
+    inputLtTitle.removeAttribute('aria-invalid');
+    return getFormData();
+  }
+
   function getFormData() {
     return {
-      title: inputLtTitle.value.trim() || 'MESSAGE',
+      title: inputLtTitle.value.trim(),
       subtitle: inputLtSubtitle.value.trim(),
       value: inputLtValue.value.trim(),
-      duration: Math.max(0, parseInt(inputLtDuration.value, 10) || 0),
+      duration: parseInt(inputLtDuration.value, 10) || 5,
       position: selectLtPosition.value,
       style: 'standard',
       color: inputLtColor.value || '#eab308'
@@ -58,8 +70,8 @@ window.GraphicsModule = (function() {
   }
 
   function showCurrentMessage() {
-    const data = getFormData();
-    window.bosAPI.graphics.showLowerThird(data);
+    const data = getValidatedFormData();
+    if (data) window.bosAPI.graphics.showLowerThird(data);
   }
 
   async function loadPresets() {
@@ -69,10 +81,15 @@ window.GraphicsModule = (function() {
       presets.forEach(p => {
         const btn = document.createElement('button');
         btn.className = 'preset-btn';
-        btn.innerHTML = `
-          <span class="preset-title">${p.title}</span>
-          <span class="preset-sub">${p.subtitle || ''}</span>
-        `;
+        btn.type = 'button';
+        btn.title = 'Show on air now';
+        const presetTitle = document.createElement('span');
+        presetTitle.className = 'preset-title';
+        presetTitle.textContent = p.title;
+        const presetSub = document.createElement('span');
+        presetSub.className = 'preset-sub';
+        presetSub.textContent = p.subtitle || '';
+        btn.append(presetTitle, presetSub);
         btn.addEventListener('click', () => {
           inputLtTitle.value = p.title;
           inputLtSubtitle.value = p.subtitle || '';
@@ -110,9 +127,7 @@ window.GraphicsModule = (function() {
     if (queueState.active) {
       activeGraphicCard.classList.add('on-air');
       activeLtTitle.textContent = queueState.active.title;
-      activeLtTimer.textContent = queueState.active.duration > 0
-        ? `${String(queueState.active.remainingSeconds).padStart(2, '0')}s REMAINING`
-        : 'ON AIR UNTIL HIDDEN';
+      activeLtTimer.textContent = `${String(queueState.active.remainingSeconds).padStart(2, '0')}s REMAINING`;
     } else {
       activeGraphicCard.classList.remove('on-air');
       activeLtTitle.textContent = 'NO GRAPHIC ON AIR';
@@ -130,16 +145,27 @@ window.GraphicsModule = (function() {
     queued.forEach((item, idx) => {
       const div = document.createElement('div');
       div.className = 'queue-item';
-      div.innerHTML = `
-        <div>
-          <strong style="color:#ffffff;">${idx + 1}. ${item.title}</strong>
-          <span style="color:var(--text-dim); margin-left:8px; font-size:11px;">${item.subtitle || ''} (${item.duration}s)</span>
-        </div>
-        <button class="queue-remove-btn" title="Remove">✕</button>
-      `;
-      div.querySelector('.queue-remove-btn').addEventListener('click', () => {
+
+      const label = document.createElement('div');
+      const strong = document.createElement('span');
+      strong.className = 'queue-item-title';
+      strong.textContent = `${idx + 1}. ${item.title}`;
+      const meta = document.createElement('span');
+      meta.className = 'queue-item-meta';
+      meta.textContent = `${item.subtitle || ''} (${item.duration}s)`;
+      label.append(strong, meta);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'queue-remove-btn';
+      remove.title = 'Remove from queue';
+      remove.setAttribute('aria-label', `Remove ${item.title} from queue`);
+      remove.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+      remove.addEventListener('click', () => {
         window.bosAPI.graphics.removeFromQueue(item.id);
       });
+
+      div.append(label, remove);
       graphicsQueueList.appendChild(div);
     });
   }

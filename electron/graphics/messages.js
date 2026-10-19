@@ -26,7 +26,7 @@ class MessagesManager extends EventEmitter {
       id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       title: item.title,
       subtitle: item.subtitle || '',
-      duration: item.duration !== undefined ? item.duration : 5,
+      duration: item.duration || 5,
       position: item.position || 'bottom-left',
       style: 'standard',
       timestamp: Date.now()

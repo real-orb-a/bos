@@ -3,20 +3,231 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'none'">
   <title>BOS — Broadcast Operator System</title>
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/components.css">
 </head>
-<body class="theme-dark">
+<body class="theme-dark" data-view="welcome">
+  <main class="selection-view welcome-view" id="welcome-view">
+    <header class="selection-header">
+      <div class="selection-brand"><span class="selection-brand-mark">BOS</span><span>STAFFORD SRI LANKAN SCHOOL DOHA<br>MEDIA UNIT</span></div>
+      <span class="selection-header-note">BROADCAST OPERATIONS</span>
+    </header>
+    <section class="welcome-content" aria-labelledby="welcome-title">
+      <p class="selection-eyebrow">EVENT SELECTION</p>
+      <h1 id="welcome-title" tabindex="-1">Welcome to BOS</h1>
+      <p class="selection-lede">Choose the event workspace you want to open.</p>
+      <button type="button" class="event-choice selected" id="event-choice-school" aria-pressed="true">
+        <span class="event-choice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="1"/><path d="M8 3v4M16 3v4M3 10h18M7 14h3v3H7z"/></svg></span>
+        <span class="event-choice-copy"><strong>School sports broadcast</strong><small>Stafford Sri Lankan School Doha Media Unit</small></span>
+        <span class="event-choice-check" aria-hidden="true"></span>
+      </button>
+      <div class="welcome-actions">
+        <span class="selection-note">OBS controls remain available in the event workspace.</span>
+        <button type="button" class="selection-primary" id="btn-begin-setup">CHOOSE A SPORT <span aria-hidden="true">→</span></button>
+      </div>
+    </section>
+    <footer class="selection-footer"><span>BOS · BROADCAST OPERATOR SYSTEM</span><span>SCHOOL SPORTS OPERATIONS</span></footer>
+  </main>
+
+  <main class="selection-view sports-view hidden" id="sports-view" aria-labelledby="sports-title">
+    <header class="selection-header">
+      <button type="button" class="selection-back" id="btn-sports-back" aria-label="Back to event selection"><span aria-hidden="true">←</span> EVENT</button>
+      <div class="selection-brand"><span class="selection-brand-mark">BOS</span><span>STAFFORD SRI LANKAN SCHOOL DOHA<br>MEDIA UNIT</span></div>
+      <span class="selection-header-note">SCHOOL SPORTS BROADCAST</span>
+    </header>
+    <section class="sports-content">
+      <div class="sports-heading">
+        <div><p class="selection-eyebrow">SELECT WORKSPACE</p><h1 id="sports-title" tabindex="-1">Choose a sport</h1><p class="selection-lede">Select the sport for this broadcast.</p></div>
+        <span class="sports-count">06 SPORTS</span>
+      </div>
+      <div class="sport-grid" role="group" aria-label="Sports">
+        <button type="button" class="sport-tile" data-sport="Athletics">
+          <span class="sport-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="20" cy="6" r="2.5"/><path d="m17 12 4-2 4 3-2 4-5-2-3 4 4 3-2 6M17 12l-5 3-4-1M18 22l-5 2-4 5M22 17l4 4 3 1"/></svg></span><span class="sport-copy"><strong>Athletics</strong><small>Track and field events</small><small class="sport-availability">PLANNED</small></span><span class="sport-arrow" aria-hidden="true">→</span>
+        </button>
+        <button type="button" class="sport-tile" data-sport="Football">
+          <span class="sport-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12"/><path d="m12 11 4-2 4 3-1 5-5 1-3-4 1-3ZM12 11 8 7M20 12l5-2M19 17l4 5M14 18l-1 7M11 14l-7-1"/></svg></span><span class="sport-copy"><strong>Football</strong><small>Match and scoreboard controls</small></span><span class="sport-arrow" aria-hidden="true">→</span>
+        </button>
+        <button type="button" class="sport-tile" data-sport="Basketball">
+          <span class="sport-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12"/><path d="M4.5 12h23M4.5 20h23M12 5c3 4 5 8 5 11s-2 7-5 11M20 5c-3 4-5 8-5 11s2 7 5 11"/></svg></span><span class="sport-copy"><strong>Basketball</strong><small>Game and shot-clock controls</small><small class="sport-availability">AVAILABLE</small></span><span class="sport-arrow" aria-hidden="true">→</span>
+        </button>
+        <button type="button" class="sport-tile" data-sport="Netball">
+          <span class="sport-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12"/><path d="M4.8 12h22.4M7 22h18M16 4v24M7.5 7.5l17 17M24.5 7.5l-17 17"/></svg></span><span class="sport-copy"><strong>Netball</strong><small>Court sport</small><small class="sport-availability">PLANNED</small></span><span class="sport-arrow" aria-hidden="true">→</span>
+        </button>
+        <button type="button" class="sport-tile" data-sport="Cricket">
+          <span class="sport-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12"/><path d="M11 6c1 3 0 6-3 8s-3 5-1 8M21 26c-1-3 0-6 3-8s3-5 1-8"/></svg></span><span class="sport-copy"><strong>Cricket</strong><small>Bat-and-ball sport</small><small class="sport-availability">PLANNED</small></span><span class="sport-arrow" aria-hidden="true">→</span>
+        </button>
+        <button type="button" class="sport-tile" data-sport="Volleyball">
+          <span class="sport-icon" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12"/><path d="M8 7c6 2 10 7 11 13M25 9c-6 2-10 6-12 12M7 23c5-4 11-4 17-1"/></svg></span><span class="sport-copy"><strong>Volleyball</strong><small>Court match control</small><small class="sport-availability">AVAILABLE</small></span><span class="sport-arrow" aria-hidden="true">→</span>
+        </button>
+      </div>
+    </section>
+    <footer class="selection-footer"><span>SELECT A SPORT TO CONTINUE</span><span>STAFFORD SRI LANKAN SCHOOL DOHA</span></footer>
+  </main>
+
+  <main class="selection-view sport-landing-view hidden" id="sport-landing-view" aria-labelledby="sport-landing-title">
+    <header class="selection-header">
+      <button type="button" class="selection-back" id="btn-sport-landing-back"><span aria-hidden="true">←</span> SPORTS</button>
+      <div class="selection-brand"><span class="selection-brand-mark">BOS</span><span>STAFFORD SRI LANKAN SCHOOL DOHA<br>MEDIA UNIT</span></div>
+      <span class="selection-header-note">SPORT WORKSPACE</span>
+    </header>
+    <section class="sport-info-content">
+      <p class="selection-eyebrow">SPORT WORKSPACE</p>
+      <div class="sport-landing-title-row"><span class="sport-landing-icon" id="sport-landing-icon" aria-hidden="true"></span><div><h1 id="sport-landing-title" tabindex="-1">Athletics</h1><p class="selection-lede" id="sport-landing-description"></p></div></div>
+      <div class="sport-capabilities">
+        <section class="sport-capability"><span class="capability-state">AVAILABLE</span><div><h2>Shared team setup</h2><p id="sport-landing-available"></p></div></section>
+        <section class="sport-capability"><span class="capability-state planned">PLANNED</span><div><h2>Sport operations</h2><p id="sport-landing-planned"></p></div></section>
+      </div>
+      <p class="sport-setup-note">Team names, hotkeys, and graphic palettes are shared with the Football control room and its broadcast graphics.</p>
+      <div class="sport-landing-actions">
+        <button type="button" class="selection-secondary hidden" id="btn-open-athletics-setup">ATHLETICS COMPETITION SETUP <span aria-hidden="true">→</span></button>
+        <button type="button" class="selection-primary hidden" id="btn-open-volleyball">VOLLEYBALL MATCH CONTROL <span aria-hidden="true">→</span></button>
+        <button type="button" class="selection-primary hidden" id="btn-open-basketball">BASKETBALL MATCH CONTROL <span aria-hidden="true">→</span></button>
+        <button type="button" class="selection-primary" id="btn-open-shared-team-settings">OPEN TEAM &amp; BRANDING SETTINGS <span aria-hidden="true">→</span></button>
+      </div>
+    </section>
+    <footer class="selection-footer"><span>BOS · BROADCAST OPERATOR SYSTEM</span><span>SPORT WORKSPACE</span></footer>
+  </main>
+
+  <main class="selection-view athletics-setup-view hidden" id="athletics-setup-view" aria-labelledby="athletics-setup-title">
+    <header class="selection-header">
+      <button type="button" class="selection-back" id="btn-athletics-setup-back"><span aria-hidden="true">←</span> ATHLETICS</button>
+      <div class="selection-brand"><span class="selection-brand-mark">BOS</span><span>STAFFORD SRI LANKAN SCHOOL DOHA<br>MEDIA UNIT</span></div>
+      <span class="selection-header-note">ATHLETICS WORKSPACE</span>
+    </header>
+    <section class="sport-info-content athletics-setup-content">
+      <p class="selection-eyebrow">ATHLETICS</p>
+      <h1 id="athletics-setup-title" tabindex="-1">Competition setup</h1>
+      <p class="selection-lede">This is the planned entry point for configuring an athletics competition.</p>
+      <div class="sport-capability setup-planned"><span class="capability-state planned">PLANNED</span><div><h2>Competition workflow</h2><p>Event lists, heats, lane assignments, race timing, and results are not available here yet. No timing or result controls are active.</p></div></div>
+      <button type="button" class="selection-secondary" id="btn-athletics-setup-team-settings">OPEN SHARED TEAM &amp; BRANDING SETTINGS <span aria-hidden="true">→</span></button>
+    </section>
+    <footer class="selection-footer"><span>BOS · BROADCAST OPERATOR SYSTEM</span><span>ATHLETICS</span></footer>
+  </main>
+
+  <main class="selection-view basketball-setup-view hidden" id="basketball-setup-view" aria-labelledby="basketball-setup-title">
+    <header class="selection-header">
+      <button type="button" class="selection-back" id="btn-basketball-setup-back"><span aria-hidden="true">←</span> BASKETBALL</button>
+      <div class="selection-brand"><span class="selection-brand-mark">BOS</span><span>STAFFORD SRI LANKAN SCHOOL DOHA<br>MEDIA UNIT</span></div>
+      <span class="selection-header-note">BASKETBALL MATCH SETUP</span>
+    </header>
+    <section class="basketball-setup-content">
+      <p class="selection-eyebrow">NEW MATCH</p>
+      <h1 id="basketball-setup-title" tabindex="-1">Match setup</h1>
+      <div class="basketball-form-grid">
+        <label>COMPETITION<input id="basketball-competition" type="text" maxlength="80" autocomplete="off"></label>
+        <label>MATCH NAME<input id="basketball-match-name" type="text" maxlength="80" autocomplete="off"></label>
+        <label>HOME TEAM<input id="basketball-home-name" type="text" maxlength="48" autocomplete="off"></label>
+        <label>AWAY TEAM<input id="basketball-away-name" type="text" maxlength="48" autocomplete="off"></label>
+        <label>PERIODS<input id="basketball-period-count" type="number" min="2" max="8" value="4"></label>
+        <label>PERIOD LENGTH (MINUTES)<input id="basketball-period-minutes" type="number" min="1" max="30" value="10"></label>
+        <label>SHOT CLOCK (SECONDS)<input id="basketball-shot-clock" type="number" min="1" max="60" value="24"></label>
+      </div>
+      <p class="basketball-feedback" id="basketball-setup-feedback" role="status" aria-live="polite"></p>
+      <div class="volleyball-actions"><button type="button" class="selection-secondary" id="btn-basketball-setup-cancel">CANCEL</button><button type="button" class="selection-primary" id="btn-basketball-create-match">CREATE MATCH <span aria-hidden="true">→</span></button></div>
+    </section>
+    <footer class="selection-footer"><span>BOS · BASKETBALL</span><span>MATCH DATA IS SAVED LOCALLY</span></footer>
+  </main>
+
+  <main class="selection-view basketball-control-view hidden" id="basketball-control-view" aria-labelledby="basketball-control-title">
+    <header class="selection-header volleyball-control-header">
+      <button type="button" class="selection-back" id="btn-basketball-back-sports"><span aria-hidden="true">←</span> SPORTS</button>
+      <div class="volleyball-control-heading"><p class="selection-eyebrow">BASKETBALL CONTROL ROOM</p><h1 id="basketball-control-title" tabindex="-1">Match control</h1></div>
+      <div class="volleyball-header-actions"><span class="vball-status" id="basketball-status"></span><button type="button" class="selection-secondary hidden" id="btn-basketball-new-match">NEW MATCH</button></div>
+    </header>
+    <section class="basketball-live-content">
+      <div class="basketball-scoreboard">
+        <div class="volleyball-match-meta"><span id="basketball-live-competition"></span><span id="basketball-live-match"></span></div>
+        <div class="basketball-score-grid">
+          <article class="basketball-team"><span>HOME</span><strong id="basketball-live-home-name"></strong><strong class="basketball-points" id="basketball-live-home-score">0</strong><div class="basketball-quick-scores"><button data-side="home" data-points="1">+1</button><button data-side="home" data-points="2">+2</button><button data-side="home" data-points="3">+3</button></div><div class="basketball-team-stats"><span>FOULS <b id="basketball-live-home-fouls">0</b></span><span>TIMEOUTS <b id="basketball-live-home-timeouts">0</b></span></div><div class="basketball-team-actions"><button data-foul="home">ADD FOUL</button><button data-timeout="home">TIMEOUT</button><button data-adjust="home" data-delta="-1">−1</button></div></article>
+          <div class="basketball-clock"><span id="basketball-period-label">Q1</span><strong id="basketball-live-clock">10:00</strong><span>SHOT CLOCK</span><strong id="basketball-live-shot">24</strong><span id="basketball-live-state">READY</span></div>
+          <article class="basketball-team"><span>AWAY</span><strong id="basketball-live-away-name"></strong><strong class="basketball-points" id="basketball-live-away-score">0</strong><div class="basketball-quick-scores"><button data-side="away" data-points="1">+1</button><button data-side="away" data-points="2">+2</button><button data-side="away" data-points="3">+3</button></div><div class="basketball-team-stats"><span>FOULS <b id="basketball-live-away-fouls">0</b></span><span>TIMEOUTS <b id="basketball-live-away-timeouts">0</b></span></div><div class="basketball-team-actions"><button data-foul="away">ADD FOUL</button><button data-timeout="away">TIMEOUT</button><button data-adjust="away" data-delta="-1">−1</button></div></article>
+        </div>
+      </div>
+      <div class="basketball-control-grid">
+        <section class="basketball-control-section"><h2>GAME CLOCK</h2><div class="basketball-control-row"><button id="btn-basketball-clock-toggle">START CLOCK</button><button class="hidden" id="btn-basketball-end-timeout">END TIMEOUT</button><input id="basketball-clock-input" type="number" min="0" max="3600" aria-label="Set game clock seconds"><button id="btn-basketball-set-clock">SET SECONDS</button></div><div class="basketball-control-row"><label>PERIOD<select id="basketball-period-select"></select></label><button id="btn-basketball-next-period">NEXT PERIOD</button></div></section>
+        <section class="basketball-control-section"><h2>SHOT CLOCK</h2><div class="basketball-control-row"><button data-shot="24">RESET 24</button><button data-shot="14">RESET 14</button><input id="basketball-shot-input" type="number" min="0" max="60" aria-label="Set shot clock seconds"><button id="btn-basketball-set-shot">SET</button></div></section>
+        <section class="basketball-control-section"><h2>ON-SCREEN ANNOUNCEMENT</h2><div class="basketball-control-row"><input id="basketball-announcement-text" type="text" maxlength="240" placeholder="Announcement text"><button id="btn-basketball-show-announcement">TAKE LIVE</button><button id="btn-basketball-clear-announcement">CLEAR</button></div><p class="basketball-feedback" id="basketball-control-feedback" role="status" aria-live="polite"></p></section>
+      </div>
+    </section>
+  </main>
+
+  <main class="selection-view volleyball-setup-view hidden" id="volleyball-setup-view" aria-labelledby="volleyball-setup-title">
+    <header class="selection-header">
+      <button type="button" class="selection-back" id="btn-volleyball-setup-back"><span aria-hidden="true">←</span> VOLLEYBALL</button>
+      <div class="selection-brand"><span class="selection-brand-mark">BOS</span><span>STAFFORD SRI LANKAN SCHOOL DOHA<br>MEDIA UNIT</span></div>
+      <span class="selection-header-note">VOLLEYBALL MATCH SETUP</span>
+    </header>
+    <section class="volleyball-setup-content">
+      <p class="selection-eyebrow">NEW MATCH</p>
+      <h1 id="volleyball-setup-title" tabindex="-1">Match setup</h1>
+      <div class="volleyball-form-grid">
+        <label>COMPETITION<input id="vball-competition" type="text" maxlength="80" autocomplete="off"></label>
+        <label>MATCH NAME<input id="vball-match-name" type="text" maxlength="80" autocomplete="off"></label>
+        <label>FIRST TEAM<input id="vball-home-name" type="text" maxlength="48" autocomplete="off"></label>
+        <label>SECOND TEAM<input id="vball-away-name" type="text" maxlength="48" autocomplete="off"></label>
+        <label>BEST OF<select id="vball-best-of"><option>1</option><option>3</option><option selected>5</option><option>7</option><option>9</option></select></label>
+        <label>REGULAR SET TARGET<input id="vball-regular-target" type="number" min="1" max="99" value="25"></label>
+        <label>DECIDING SET TARGET<input id="vball-deciding-target" type="number" min="1" max="99" value="15"></label>
+        <label>FIRST SERVE<select id="vball-first-serve"><option value="home">First team</option><option value="away">Second team</option></select></label>
+        <label>TIMEOUTS PER TEAM / SET<input id="vball-timeout-allowance" type="number" min="0" max="20" value="2"></label>
+        <label>TIMEOUT DURATION (SECONDS)<input id="vball-timeout-seconds" type="number" min="1" max="3600" value="30"></label>
+        <label>TIMEOUT RESET POLICY<select id="vball-timeout-reset"><option value="eachSet">Reset each set</option><option value="match">Match total</option></select></label>
+        <label>DECIDING-SET SIDE PROMPT POINTS<input id="vball-side-deciding-points" type="text" placeholder="e.g. 8, 16"></label>
+        <label>ANNOUNCEMENT CHARACTER LIMIT<input id="vball-announcement-limit" type="number" min="1" max="2000" value="240"></label>
+        <label>COMPLETED RESULT RETENTION<input id="vball-results-limit" type="number" min="0" max="10000" value="0"><small>0 keeps all results</small></label>
+        <label class="volleyball-check"><input id="vball-win-by-two" type="checkbox" checked> WIN BY TWO</label>
+        <label class="volleyball-check"><input id="vball-side-set-end" type="checkbox"> PROMPT AT EACH SET END</label>
+      </div>
+      <p class="volleyball-feedback" id="vball-setup-feedback" role="status" aria-live="polite"></p>
+      <div class="volleyball-actions"><button type="button" class="selection-secondary" id="btn-volleyball-setup-cancel">CANCEL</button><button type="button" class="selection-primary" id="btn-volleyball-create-match">CREATE MATCH <span aria-hidden="true">→</span></button></div>
+    </section>
+    <footer class="selection-footer"><span>BOS · VOLLEYBALL</span><span>SETUP IS SAVED LOCALLY</span></footer>
+  </main>
+
+  <main class="selection-view volleyball-control-view hidden" id="volleyball-control-view" aria-labelledby="vball-control-title">
+    <header class="selection-header volleyball-control-header">
+      <button type="button" class="selection-back" id="btn-volleyball-back-sports"><span aria-hidden="true">←</span> SPORTS</button>
+      <div class="volleyball-control-heading"><p class="selection-eyebrow">VOLLEYBALL CONTROL ROOM</p><h1 id="vball-control-title">Match control</h1></div>
+      <div class="volleyball-header-actions"><span class="vball-status" id="vball-control-status"></span><button type="button" class="selection-secondary hidden" id="btn-volleyball-new-match">NEW MATCH</button></div>
+    </header>
+    <section class="volleyball-live-content">
+      <div class="volleyball-scoreboard" aria-label="Volleyball live scoreboard">
+        <div class="volleyball-match-meta"><span id="vball-live-competition"></span><span id="vball-live-match-name"></span></div>
+        <div class="volleyball-team-grid">
+          <article class="volleyball-team" id="vball-left-card"><span class="vball-side-tag">LEFT</span><strong id="vball-left-name"></strong><span class="vball-sets" id="vball-left-sets"></span><strong class="vball-points" id="vball-left-points"></strong><span class="vball-serving hidden" id="vball-left-serving">SERVING</span><button type="button" class="vball-point-button" id="btn-vball-left-point" aria-label="Award a point to the left-side team">+ POINT</button></article>
+          <div class="volleyball-score-divider" aria-hidden="true">:</div>
+          <article class="volleyball-team" id="vball-right-card"><span class="vball-side-tag">RIGHT</span><strong id="vball-right-name"></strong><span class="vball-sets" id="vball-right-sets"></span><strong class="vball-points" id="vball-right-points"></strong><span class="vball-serving hidden" id="vball-right-serving">SERVING</span><button type="button" class="vball-point-button" id="btn-vball-right-point" aria-label="Award a point to the right-side team">+ POINT</button></article>
+        </div>
+        <div class="volleyball-live-meta"><span id="vball-current-set"></span><span id="vball-serving-team"></span><span id="vball-live-status"></span><span id="vball-live-timeout"></span></div>
+      </div>
+      <div class="volleyball-primary-actions"><button type="button" class="selection-secondary" id="btn-vball-switch-sides">↔ SWITCH SIDES</button><button type="button" class="selection-secondary" id="btn-vball-undo-sides">UNDO SIDE SWITCH</button><button type="button" class="selection-secondary hidden" id="btn-vball-start-match">START MATCH</button><button type="button" class="selection-secondary hidden" id="btn-vball-record-set">RECORD SET RESULT</button><button type="button" class="selection-secondary hidden" id="btn-vball-advance-set">START NEXT SET</button><button type="button" class="selection-secondary" id="btn-vball-undo-point">UNDO LAST POINT</button><input id="vball-correction-reason" type="text" maxlength="300" placeholder="Correction reason"></div>
+      <p class="volleyball-feedback" id="vball-control-feedback" role="status" aria-live="polite"></p>
+      <div class="volleyball-secondary-grid">
+        <section class="volleyball-section"><h2>TIMEOUTS</h2><div class="vball-timeout-row"><span id="vball-home-timeouts"></span><button type="button" id="btn-vball-home-timeout">CALL TIMEOUT</button></div><div class="vball-timeout-row"><span id="vball-away-timeouts"></span><button type="button" id="btn-vball-away-timeout">CALL TIMEOUT</button></div><label class="vball-override-label" for="vball-timeout-override-reason">AUTHORIZED OVERRIDE REASON<input id="vball-timeout-override-reason" type="text" maxlength="300" placeholder="Required when allowance is exhausted"></label><div class="vball-active-timeout hidden" id="vball-timeout-panel"><strong id="vball-timeout-status"></strong><div class="vball-timeout-actions"><button type="button" id="btn-vball-end-timeout">END TIMEOUT</button><button type="button" id="btn-vball-cancel-timeout">CANCEL TIMEOUT</button></div></div></section>
+        <section class="volleyball-section"><h2>SET HISTORY</h2><ol id="vball-set-history"></ol></section>
+      </div>
+      <section class="volleyball-section vball-side-prompt hidden" id="vball-side-prompt"><h2 id="vball-side-prompt-title">SIDE CHANGE</h2><p id="vball-side-prompt-reason"></p><div class="volleyball-actions"><button type="button" id="btn-vball-prompt-switch">SWITCH SIDES</button><button type="button" id="btn-vball-prompt-dismiss">DISMISS</button><button type="button" id="btn-vball-prompt-defer">DEFER</button></div></section>
+      <section class="volleyball-section vball-recovery-panel hidden" id="vball-recovery-panel"><h2>TIMEOUT RECOVERY</h2><p>The previous session ended during a timeout. Choose how to resolve it.</p><div class="volleyball-actions"><button type="button" id="btn-vball-recovery-resume">RESUME REMAINING</button><button type="button" id="btn-vball-recovery-end">END</button><button type="button" id="btn-vball-recovery-cancel">CANCEL</button></div></section>
+      <section class="volleyball-section"><h2>ANNOUNCEMENTS · ON-SCREEN ONLY</h2><label for="vball-announcement-draft">DRAFT TEXT</label><textarea id="vball-announcement-draft" rows="3" maxlength="240"></textarea><div class="volleyball-announcement-meta"><span id="vball-announcement-count">0 / 240</span><span id="vball-announcement-live-state">No announcement live</span></div><div class="volleyball-actions"><button type="button" id="btn-vball-preview-announcement">PREVIEW</button><button type="button" id="btn-vball-take-announcement-live">TAKE LIVE</button><button type="button" id="btn-vball-clear-announcement">CLEAR LIVE</button></div><div class="vball-announcement-preview hidden" id="vball-announcement-preview"><strong>PREVIEW · NOT LIVE</strong><p id="vball-announcement-preview-text"></p></div></section>
+      <section class="volleyball-section"><h2>COMPLETED RESULTS</h2><ol id="vball-completed-results"></ol><div class="vball-correction-panel hidden" id="vball-correction-panel"><label>SET TO CORRECT<select id="vball-correction-set"></select></label><label>FIRST TEAM POINTS<input id="vball-correction-home" type="number" min="0" max="200"></label><label>SECOND TEAM POINTS<input id="vball-correction-away" type="number" min="0" max="200"></label><button type="button" id="btn-vball-correct-set">SAVE CORRECTION</button><button type="button" class="hidden" id="btn-vball-finalize-correction">FINALIZE CORRECTED RESULT</button></div></section>
+    </section>
+    <footer class="selection-footer"><span>BOS · VOLLEYBALL CONTROL</span><span>FOOTBALL STATE IS SEPARATE</span></footer>
+  </main>
+
+  <div class="app-view hidden" id="control-room-view">
   <!-- Top Master Broadcast Header -->
   <header class="master-header">
     <div class="header-left">
+      <button type="button" class="selection-back-btn" id="btn-return-selection" title="Return to sport selection" aria-label="Return to sport selection"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h12"/></svg></button>
       <div class="app-brand">
         <span class="brand-title">BOS</span>
         <span class="brand-subtitle">BROADCAST OPERATOR SYSTEM</span>
       </div>
 
-      <div class="program-monitor-badge" id="program-status-badge">
+      <div class="program-monitor-badge" id="program-status-badge" role="status">
+        <span class="monitor-dot" id="program-dot"></span>
         <span class="monitor-text" id="program-text">PROGRAM: LIVE</span>
       </div>
 
@@ -34,46 +245,48 @@
     <!-- Master Clock in Header -->
     <div class="header-center">
       <div class="master-clock-container">
-        <button class="clock-action-btn" id="btn-clock-toggle" title="Spacebar: Start/Pause">
-          <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <button class="clock-action-btn" id="btn-clock-toggle" title="Spacebar: Start/Pause" aria-label="Start or pause match clock">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 12 7-12 7z"/></svg>
         </button>
         <div class="master-clock-display" id="master-clock-display">00:00</div>
         <div class="master-period-display" id="master-period-display">1ST HALF</div>
         <!-- Additional-time overlay: appears below the clock once the set time is done -->
         <div class="master-stoppage-display hidden" id="master-stoppage-display">00:00</div>
-        <button class="clock-action-btn secondary" id="btn-clock-reset" title="Reset Clock">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        <button class="clock-action-btn secondary" id="btn-clock-reset" title="Reset Clock" aria-label="Reset match clock">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
         </button>
       </div>
     </div>
 
     <div class="header-right">
       <div class="obs-status-indicator" id="obs-status-indicator">
-        <span class="obs-label" id="obs-label">OBS CONNECTING...</span>
+        <span class="obs-dot" id="obs-dot"></span>
+        <span class="obs-label" id="obs-label">OBS CONNECTING…</span>
         <span class="obs-ping" id="obs-ping">-- ms</span>
-        <button class="obs-reconnect-btn" id="btn-obs-reconnect" title="Reconnect OBS">↺</button>
+        <button class="obs-reconnect-btn" id="btn-obs-reconnect" title="Reconnect to OBS" aria-label="Reconnect to OBS"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
       </div>
 
       <button class="emergency-abort-btn" id="btn-emergency-abort" title="Hotkey: L">
-        <span class="emergency-icon">⚠</span>
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
         <span>RETURN TO LIVE</span>
       </button>
 
-      <button class="settings-trigger-btn" id="btn-open-settings" title="Settings">
-        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <button class="settings-trigger-btn" id="btn-open-settings" title="Settings" aria-label="Open settings" aria-haspopup="dialog">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
     </div>
   </header>
 
   <!-- Automated Goal Sequence Banner (Shows during active sequence) -->
-  <div class="active-sequence-bar hidden" id="active-sequence-bar">
+  <div class="active-sequence-bar hidden" id="active-sequence-bar" role="status" aria-live="polite">
     <div class="sequence-info">
+      <span class="sequence-pulse"></span>
       <span class="sequence-title" id="seq-title">AUTOMATED GOAL SEQUENCE IN PROGRESS</span>
-      <span class="sequence-step-pill" id="seq-step-pill">GOAL SEQUENCE</span>
+      <span class="sequence-step-pill" id="seq-step-pill">PREPARING REPLAY</span>
     </div>
     <div class="sequence-actions">
       <button class="sequence-go-ahead-btn hidden" id="btn-continue-sequence">GO AHEAD → LIVE</button>
-      <button class="sequence-abort-btn" id="btn-abort-sequence">CANCEL SEQUENCE</button>
+      <button class="sequence-abort-btn" id="btn-abort-sequence">SKIP / CANCEL SEQUENCE</button>
     </div>
   </div>
 
@@ -88,111 +301,7 @@
           <span class="panel-badge">OFFICIAL</span>
         </div>
 
-        <!-- Match State Selector -->
-        <div class="form-group">
-          <label>MATCH STATE</label>
-          <select id="select-match-state" class="styled-select">
-            <option value="PRE_MATCH">PRE_MATCH</option>
-            <option value="LIVE" selected>LIVE</option>
-            <option value="HALF_TIME">HALF_TIME</option>
-            <option value="LIVE_SECOND_HALF">LIVE_SECOND_HALF</option>
-            <option value="FULL_TIME">FULL_TIME</option>
-            <option value="BREAK">BREAK</option>
-            <option value="DELAYED">DELAYED</option>
-            <option value="UNDER_REVIEW">UNDER_REVIEW</option>
-          </select>
-        </div>
-
-        <!-- Period Selector & Set Time (regulation length) -->
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label>PERIOD LABEL</label>
-            <input type="text" id="select-period" class="styled-input" value="1st Half" maxlength="24">
-          </div>
-          <div class="form-group flex-1" id="regulation-time-control">
-            <label>SET TIME (MIN)</label>
-            <input type="number" id="input-regulation-min" class="styled-input" value="90" min="1" max="240">
-          </div>
-        </div>
-
-        <div class="form-group" id="start-time-control">
-          <label>SET CLOCK / START TIME (MM:SS)</label>
-          <input type="text" id="input-start-time" class="styled-input" value="00:00" inputmode="numeric" placeholder="00:00">
-        </div>
-
-        <!-- Timer Mode: count up (football) or count down (basketball) -->
-        <div class="form-group" id="timer-mode-control">
-          <label>TIMER MODE</label>
-          <select id="select-timer-mode" class="styled-select">
-            <option value="stopwatch" selected>STOPWATCH — COUNT UP (FOOTBALL)</option>
-            <option value="countdown">COUNTDOWN — COUNT DOWN (BASKETBALL)</option>
-            <option value="none">NO TIME — MANUAL PLAY</option>
-          </select>
-        </div>
-
-        <div class="form-group" id="additional-time-mode-control">
-          <label>ADDED TIME START</label>
-          <select id="select-additional-time-mode" class="styled-select">
-            <option value="automatic">AUTOMATIC AT SET TIME</option>
-            <option value="approval">WAIT FOR GO AHEAD</option>
-          </select>
-        </div>
-
-        <!-- Additional time: counted from 00:00 below the clock after the set time -->
-        <div class="form-group" id="stoppage-time-control">
-          <label>ADDITIONAL TIME (AFTER SET TIME)</label>
-          <div class="stoppage-buttons">
-            <button class="stoppage-btn" data-min="0">0</button>
-            <button class="stoppage-btn" data-min="1">+1</button>
-            <button class="stoppage-btn" data-min="2">+2</button>
-            <button class="stoppage-btn" data-min="3">+3</button>
-            <button class="stoppage-btn" data-min="4">+4</button>
-            <button class="stoppage-btn" data-min="5">+5</button>
-          </div>
-          <button type="button" class="added-time-approval-btn hidden" id="btn-approve-added-time">GO AHEAD</button>
-        </div>
-
-        <div class="scoring-value-control">
-          <label>POINTS PER SCORE</label>
-          <div class="scoring-value-options" role="group" aria-label="Points awarded per score">
-            <button type="button" class="scoring-value-btn active" data-score-points="1" aria-pressed="true">1</button>
-            <button type="button" class="scoring-value-btn" data-score-points="2" aria-pressed="false">2</button>
-            <button type="button" class="scoring-value-btn" data-score-points="3" aria-pressed="false">3</button>
-          </div>
-
-        </div>
-
-        <div class="volleyball-sets-control">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label>VOLLEYBALL TOTAL SETS</label>
-              <input type="number" id="input-best-of-sets" class="styled-input" value="3" min="1" max="9">
-            </div>
-            <div class="form-group flex-1">
-              <label>SETS WON</label>
-              <div class="set-score-display">
-                <div class="set-tally-control">
-                  <button type="button" class="set-tally-adjust" data-team="home" data-amount="-1" aria-label="Decrease home sets">−</button>
-                  <span id="home-sets-won">0</span>
-                  <button type="button" class="set-tally-adjust" data-team="home" data-amount="1" aria-label="Increase home sets">+</button>
-                </div>
-                <span>–</span>
-                <div class="set-tally-control">
-                  <button type="button" class="set-tally-adjust" data-team="away" data-amount="-1" aria-label="Decrease away sets">−</button>
-                  <span id="away-sets-won">0</span>
-                  <button type="button" class="set-tally-adjust" data-team="away" data-amount="1" aria-label="Increase away sets">+</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="form-row">
-            <button type="button" class="secondary-action-btn flex-1" id="btn-award-set-home">AWARD SET TO HOME</button>
-            <button type="button" class="secondary-action-btn flex-1" id="btn-award-set-away">AWARD SET TO AWAY</button>
-          </div>
-          <div class="completed-sets-list" id="completed-sets-list">No sets completed</div>
-          <button type="button" class="text-btn" id="btn-reset-sets">RESET SET RESULTS</button>
-        </div>
-
+        <!-- Live controls first: goals and score -->
         <!-- DEDICATED GOAL BUTTONS (Section 9) -->
         <div class="goal-triggers-container">
           <div class="goal-trigger-box home-box">
@@ -202,9 +311,9 @@
               <span class="hotkey-pill" id="home-goal-hotkey" data-code="KeyG">G</span>
             </button>
             <div class="score-adjuster">
-              <button class="score-mod-btn" id="btn-sub-home">-</button>
+              <button class="score-mod-btn" id="btn-sub-home" aria-label="Decrease home score">−</button>
               <span class="score-num" id="display-home-score">0</span>
-              <button class="score-mod-btn" id="btn-add-home">+</button>
+              <button class="score-mod-btn" id="btn-add-home" aria-label="Increase home score">+</button>
             </div>
           </div>
 
@@ -215,25 +324,101 @@
               <span class="hotkey-pill" id="away-goal-hotkey" data-code="KeyT">T</span>
             </button>
             <div class="score-adjuster">
-              <button class="score-mod-btn" id="btn-sub-away">-</button>
+              <button class="score-mod-btn" id="btn-sub-away" aria-label="Decrease away score">−</button>
               <span class="score-num" id="display-away-score">0</span>
-              <button class="score-mod-btn" id="btn-add-away">+</button>
+              <button class="score-mod-btn" id="btn-add-away" aria-label="Increase away score">+</button>
             </div>
+          </div>
+        </div>
+
+        <div class="scoring-value-control">
+          <label>POINTS PER SCORE</label>
+          <div class="scoring-value-options" role="group" aria-label="Points awarded per score">
+            <button type="button" class="scoring-value-btn active" data-score-points="1" aria-pressed="true">1</button>
+            <button type="button" class="scoring-value-btn" data-score-points="2" aria-pressed="false">2</button>
+            <button type="button" class="scoring-value-btn" data-score-points="3" aria-pressed="false">3</button>
           </div>
         </div>
 
         <!-- Reset Score / Quick Sync -->
         <div class="card-footer-actions">
-          <button class="action-btn-secondary" id="btn-reset-score">RESET SCORE + SETS</button>
+          <button class="action-btn-secondary" id="btn-reset-score">RESET SCORE</button>
+          <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-scorebug" type="button" aria-pressed="true">FADE SCORE BUG OUT</button>
         </div>
-        <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-scorebug" type="button" aria-pressed="true">FADE SCORE BUG OUT</button>
+
+        <!-- Match State Selector + period (used at half time) -->
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="select-match-state">MATCH STATE</label>
+            <select id="select-match-state" class="styled-select">
+              <option value="PRE_MATCH">PRE_MATCH</option>
+              <option value="LIVE" selected>LIVE</option>
+              <option value="HALF_TIME">HALF_TIME</option>
+              <option value="LIVE_SECOND_HALF">LIVE_SECOND_HALF</option>
+              <option value="FULL_TIME">FULL_TIME</option>
+              <option value="BREAK">BREAK</option>
+              <option value="DELAYED">DELAYED</option>
+              <option value="UNDER_REVIEW">UNDER_REVIEW</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label for="select-period">PERIOD LABEL</label>
+            <input type="text" id="select-period" class="styled-input" value="1st Half" maxlength="24">
+          </div>
+        </div>
+
+        <!-- Additional time: counted from 00:00 below the clock after the set time -->
+        <div class="form-group">
+          <label id="added-time-label">ADDITIONAL TIME (AFTER SET TIME)</label>
+          <div class="stoppage-buttons" role="group" aria-label="Additional time in minutes">
+            <button class="stoppage-btn" data-min="0">0</button>
+            <button class="stoppage-btn" data-min="1">+1</button>
+            <button class="stoppage-btn" data-min="2">+2</button>
+            <button class="stoppage-btn" data-min="3">+3</button>
+            <button class="stoppage-btn" data-min="4">+4</button>
+            <button class="stoppage-btn" data-min="5">+5</button>
+          </div>
+          <button type="button" class="added-time-approval-btn hidden" id="btn-approve-added-time">GO AHEAD</button>
+        </div>
+
+
+        <!-- Rarely changed clock configuration, folded away -->
+        <details class="fold" id="match-setup-fold">
+          <summary>Clock &amp; match setup</summary>
+          <div class="fold-body">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="input-regulation-min">SET TIME (MIN)</label>
+                <input type="number" id="input-regulation-min" class="styled-input" value="90" min="1" max="240">
+              </div>
+              <div class="form-group flex-1">
+                <label for="input-start-time">CLOCK / START (MM:SS)</label>
+                <input type="text" id="input-start-time" class="styled-input" value="00:00" inputmode="numeric" placeholder="00:00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="select-timer-mode">TIMER MODE</label>
+              <select id="select-timer-mode" class="styled-select">
+                <option value="stopwatch" selected>STOPWATCH — COUNT UP (FOOTBALL)</option>
+                <option value="countdown">COUNTDOWN — COUNT DOWN (BASKETBALL)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="select-additional-time-mode">ADDED TIME START</label>
+              <select id="select-additional-time-mode" class="styled-select">
+                <option value="automatic">AUTOMATIC AT SET TIME</option>
+                <option value="approval">WAIT FOR GO AHEAD</option>
+              </select>
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- Match Events Stream (Section 19) -->
       <div class="card-panel events-panel flex-1">
         <div class="panel-header">
           <h2>EVENT LOG</h2>
-          <button class="text-btn" id="btn-clear-events">CLEAR</button>
+          <button class="text-btn" id="btn-clear-events" aria-label="Clear event log">CLEAR</button>
         </div>
         <div class="event-feed" id="event-feed-list">
           <!-- Dynamic Event Items -->
@@ -241,16 +426,17 @@
       </div>
     </section>
 
-    <!-- COLUMN 2: ON-SCREEN MESSAGES -->
+    <!-- COLUMN 2: DYNAMIC BROADCAST MESSAGES & LOWER THIRDS -->
     <section class="workspace-col col-graphics">
       <div class="card-panel">
         <div class="panel-header">
-          <h2>ON-SCREEN MESSAGE</h2>
+          <h2>BROADCAST MESSAGE</h2>
           <span class="panel-badge">ON AIR GRAPHIC</span>
         </div>
 
         <!-- Active Graphic Countdown (lower-third zone) -->
         <div class="active-graphic-status" id="active-graphic-card">
+          <span class="status-indicator-dot" id="lt-status-dot"></span>
           <div class="status-meta">
             <div class="status-title" id="active-lt-title">NO GRAPHIC ON AIR</div>
             <div class="status-timer" id="active-lt-timer">READY</div>
@@ -260,28 +446,28 @@
 
         <!-- Custom Message Inputs -->
         <div class="form-group">
-          <label>TITLE</label>
+          <label for="input-lt-title">TITLE</label>
           <input type="text" id="input-lt-title" class="styled-input" placeholder="e.g. UNDER REVIEW" value="UNDER REVIEW">
         </div>
 
         <div class="form-row">
           <div class="form-group flex-1">
-            <label>SUBTITLE</label>
+            <label for="input-lt-subtitle">SUBTITLE</label>
             <input type="text" id="input-lt-subtitle" class="styled-input" placeholder="e.g. DECISION PENDING" value="DECISION PENDING">
           </div>
           <div class="form-group flex-1">
-            <label>HIGHLIGHT (OPTIONAL)</label>
+            <label for="input-lt-value">HIGHLIGHT (OPTIONAL)</label>
             <input type="text" id="input-lt-value" class="styled-input" placeholder="e.g. +2ND, LIVE" value="">
           </div>
         </div>
 
-        <div class="form-group">
-          <label>DURATION (SEC, 0 = UNTIL HIDDEN)</label>
-          <input type="number" id="input-lt-duration" class="styled-input" value="5" min="0">
-        </div>
         <div class="form-row">
           <div class="form-group flex-1">
-            <label>POSITION</label>
+            <label for="input-lt-duration">DURATION (SEC)</label>
+            <input type="number" id="input-lt-duration" class="styled-input" value="5" min="1" max="60">
+          </div>
+          <div class="form-group flex-1">
+            <label for="select-lt-position">POSITION</label>
             <select id="select-lt-position" class="styled-select">
               <option value="bottom-left" selected>Left</option>
               <option value="bottom-center">Center</option>
@@ -289,7 +475,7 @@
             </select>
           </div>
           <div class="form-group flex-1">
-            <label>ACCENT COLOUR</label>
+            <label for="input-lt-color">ACCENT COLOUR</label>
             <input type="color" id="input-lt-color" class="styled-color" value="#eab308" title="House colour (Garnet red / Emerald green / Topaz yellow)">
           </div>
         </div>
@@ -301,7 +487,7 @@
 
         <!-- Quick Presets (Section 20 & 22) -->
         <div class="preset-section">
-          <label class="section-label">QUICK MESSAGES</label>
+          <label class="section-label">QUICK PRESETS — CLICK TO SHOW ON AIR</label>
           <div class="preset-grid" id="preset-buttons-container">
             <!-- Dynamic Presets -->
           </div>
@@ -311,7 +497,7 @@
         <div class="queue-section">
           <div class="queue-header">
             <label class="section-label">GRAPHICS QUEUE</label>
-            <button class="text-btn" id="btn-clear-queue">CLEAR</button>
+            <button class="text-btn" id="btn-clear-queue" aria-label="Clear graphics queue">CLEAR</button>
           </div>
           <div class="queue-list" id="graphics-queue-list">
             <div class="empty-queue-hint">Queue is empty</div>
@@ -331,6 +517,7 @@
         <!-- Source Record replay request state (the REQUEST, not any footage) -->
         <div class="replay-request-card">
           <div class="replay-request-status" id="replay-request-status">
+            <span class="replay-request-dot" id="replay-request-dot"></span>
             <span class="replay-request-text" id="replay-request-text">Ready — Source Record owns the replay buffer.</span>
           </div>
           <div class="replay-request-detail" id="replay-request-detail">No replay save requested yet.</div>
@@ -338,7 +525,7 @@
 
         <div class="button-row">
           <button class="primary-action-btn replay-btn" id="btn-save-replay" title="Hotkey: R">
-            <span>● SAVE ALL REPLAYS</span>
+            <span class="replay-btn-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M4 18v3h16v-3"/></svg>SAVE ALL REPLAYS</span>
             <span class="hotkey-pill">R</span>
           </button>
         </div>
@@ -361,80 +548,86 @@
   <div class="preview-drawer-wrapper">
     <div class="preview-drawer-header" id="preview-drawer-toggle">
       <div class="drawer-title">
-        <span class="preview-icon">👁</span>
-        <span>LIVE BROWSER SOURCE PREVIEWS (OBS STUDIO)</span>
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>GRAPHICS PREVIEWS (LOCAL BROWSER SOURCES)</span>
       </div>
       <div class="drawer-controls">
         <span class="drawer-status" id="browser-sources-url">http://localhost:8088/graphics/...</span>
-        <button class="toggle-btn" id="btn-toggle-drawer">▲ SHOW PREVIEWS</button>
+        <button class="toggle-btn" id="btn-toggle-drawer" aria-expanded="false" aria-controls="preview-drawer-body">▲ SHOW PREVIEWS</button>
       </div>
     </div>
     <div class="preview-drawer-body hidden" id="preview-drawer-body">
+      <div class="preview-note">Local previews of the browser sources. They do not confirm what is on the OBS program output.</div>
       <div class="preview-grid">
         <div class="preview-item">
           <div class="preview-label">SCORE BUG (/graphics/score/)</div>
-          <iframe src="http://localhost:8088/graphics/score/" id="iframe-score" class="preview-iframe"></iframe>
+          <iframe data-src-path="/graphics/score/" id="iframe-score" class="preview-iframe" title="Preview of the score graphic" tabindex="-1"></iframe>
         </div>
         <div class="preview-item">
           <div class="preview-label">LOWER THIRD (/graphics/lower-third/)</div>
-          <iframe src="http://localhost:8088/graphics/lower-third/" id="iframe-lt" class="preview-iframe"></iframe>
+          <iframe data-src-path="/graphics/lower-third/" id="iframe-lt" class="preview-iframe" title="Preview of the lower-third graphic" tabindex="-1"></iframe>
         </div>
         <div class="preview-item">
           <div class="preview-label">GOAL CELEBRATION (/graphics/goal/)</div>
-          <iframe src="http://localhost:8088/graphics/goal/" id="iframe-goal" class="preview-iframe"></iframe>
+          <iframe data-src-path="/graphics/goal/" id="iframe-goal" class="preview-iframe" title="Preview of the goal graphic" tabindex="-1"></iframe>
         </div>
         <div class="preview-item">
           <div class="preview-label">REPLAY OVERLAY (/graphics/replay/)</div>
-          <iframe src="http://localhost:8088/graphics/replay/" id="iframe-replay" class="preview-iframe"></iframe>
+          <iframe data-src-path="/graphics/replay/" id="iframe-replay" class="preview-iframe" title="Preview of the replay graphic" tabindex="-1"></iframe>
         </div>
       </div>
     </div>
   </div>
+  </div>
 
   <!-- Settings & Configuration Modal (Section 29) -->
   <div class="modal-backdrop hidden" id="settings-modal">
-    <div class="modal-dialog">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="modal-header">
-        <h2>BROADCAST CONFIGURATION (bos.json)</h2>
-        <button class="modal-close-btn" id="btn-close-settings">✕</button>
-      </div>
-      <div class="modal-content">
-        <!-- Tabs -->
-        <div class="modal-tabs">
-          <button class="tab-btn active" data-tab="tab-obs">OBS WebSocket</button>
-          <button class="tab-btn" data-tab="tab-teams">Teams & Branding</button>
-          <button class="tab-btn" data-tab="tab-workflow">Goal Automation</button>
-          <button class="tab-btn" data-tab="tab-hotkeys">Hotkeys</button>
+        <div>
+          <h2 id="settings-title">Settings</h2>
+          <div class="modal-subtitle">Saved to config/bos.json</div>
         </div>
+        <button class="modal-close-btn" id="btn-close-settings" aria-label="Close settings"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <!-- Tabs -->
+        <div class="modal-tabs" role="tablist" aria-label="Settings sections">
+          <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-obs" data-tab="tab-obs">OBS &amp; Replay</button>
+          <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-teams" data-tab="tab-teams">Teams &amp; Branding</button>
+          <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-workflow" data-tab="tab-workflow">Goal Automation</button>
+          <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-hotkeys" data-tab="tab-hotkeys">Hotkeys</button>
+        </div>
+        <div class="modal-content">
 
         <!-- Tab: OBS -->
-        <div class="tab-pane active" id="tab-obs">
+        <div class="tab-pane active" id="tab-obs" role="tabpanel">
           <div class="form-row">
             <div class="form-group flex-2">
-              <label>OBS HOST</label>
+              <label for="cfg-obs-host">OBS HOST</label>
               <input type="text" id="cfg-obs-host" class="styled-input" value="localhost">
             </div>
             <div class="form-group flex-1">
-              <label>PORT</label>
+              <label for="cfg-obs-port">PORT</label>
               <input type="number" id="cfg-obs-port" class="styled-input" value="4455">
             </div>
           </div>
           <div class="form-group">
-            <label>PASSWORD</label>
+            <label for="cfg-obs-password">PASSWORD</label>
             <input type="password" id="cfg-obs-password" class="styled-input" placeholder="Leave blank if disabled">
           </div>
           <div class="form-row">
             <div class="form-group flex-1">
-              <label>LIVE SCENE NAME</label>
+              <label for="cfg-scene-live">LIVE SCENE NAME</label>
               <input type="text" id="cfg-scene-live" class="styled-input" value="LIVE">
             </div>
             <div class="form-group flex-1">
-              <label>REPLAY SCENE NAME</label>
+              <label for="cfg-scene-replay">REPLAY SCENE NAME</label>
               <input type="text" id="cfg-scene-replay" class="styled-input" value="REPLAY">
             </div>
           </div>
           <div class="form-group">
-            <label>REPLAY MEDIA SOURCE NAME (for future replay airing)</label>
+            <label for="cfg-media-source">REPLAY MEDIA SOURCE NAME (for future replay airing)</label>
             <input type="text" id="cfg-media-source" class="styled-input" value="Replay Video">
           </div>
 
@@ -444,9 +637,9 @@
             <input type="checkbox" id="cfg-replay-enabled" checked>
             <label for="cfg-replay-enabled">Enable replay save trigger (Source Record)</label>
           </div>
-          <label style="font-size:10px;color:var(--text-dim);">
+          <p class="settings-hint">
             Set each camera's OBS hotkey name and context in its row. Existing shared values remain as fallback when camera overrides are blank.
-          </label>
+          </p>
           <div class="replay-source-editor">
             <div class="replay-source-editor-header">
               <label class="section-label">CAMERA REPLAY TRIGGERS</label>
@@ -457,57 +650,49 @@
         </div>
 
         <!-- Tab: Teams -->
-        <div class="tab-pane" id="tab-teams">
+        <div class="tab-pane" id="tab-teams" role="tabpanel">
           <h3>HOME TEAM</h3>
           <div class="form-row">
             <div class="form-group flex-2">
-              <label>NAME</label>
+              <label for="cfg-team-home-name">NAME</label>
               <input type="text" id="cfg-team-home-name" class="styled-input" value="GARNET">
             </div>
             <div class="form-group flex-1">
-              <label>SHORT</label>
+              <label for="cfg-team-home-short">SHORT</label>
               <input type="text" id="cfg-team-home-short" class="styled-input" value="GAR">
             </div>
             <div class="form-group flex-1">
-              <label>COLOR</label>
+              <label for="cfg-team-home-color">COLOR</label>
               <input type="color" id="cfg-team-home-color" class="styled-color" value="#e11d48">
             </div>
           </div>
           <div class="form-group">
-            <label>GOAL KEY</label>
+            <label for="cfg-team-home-hotkey">GOAL KEY</label>
             <input type="text" id="cfg-team-home-hotkey" class="styled-input" value="G" maxlength="16" placeholder="G or F1">
           </div>
-          <div class="form-group">
-            <label>GOAL BUTTON ACTION (e.g. GOAL, POINT)</label>
-            <input type="text" id="cfg-home-goal-action" class="styled-input" value="GOAL" maxlength="24">
-          </div>
 
-          <h3 style="margin-top: 16px;">AWAY TEAM</h3>
+          <h3>AWAY TEAM</h3>
           <div class="form-row">
             <div class="form-group flex-2">
-              <label>NAME</label>
+              <label for="cfg-team-away-name">NAME</label>
               <input type="text" id="cfg-team-away-name" class="styled-input" value="TOPAZ">
             </div>
             <div class="form-group flex-1">
-              <label>SHORT</label>
+              <label for="cfg-team-away-short">SHORT</label>
               <input type="text" id="cfg-team-away-short" class="styled-input" value="TOP">
             </div>
             <div class="form-group flex-1">
-              <label>COLOR</label>
+              <label for="cfg-team-away-color">COLOR</label>
               <input type="color" id="cfg-team-away-color" class="styled-color" value="#eab308">
             </div>
           </div>
           <div class="form-group">
-            <label>GOAL KEY</label>
+            <label for="cfg-team-away-hotkey">GOAL KEY</label>
             <input type="text" id="cfg-team-away-hotkey" class="styled-input" value="T" maxlength="16" placeholder="T or F2">
           </div>
-          <div class="form-group">
-            <label>GOAL BUTTON ACTION (e.g. GOAL, POINT)</label>
-            <input type="text" id="cfg-away-goal-action" class="styled-input" value="GOAL" maxlength="24">
-          </div>
 
-          <h3 style="margin-top: 16px;">HOUSE PALETTES</h3>
-          <label class="section-label" style="font-size:10px;color:var(--text-dim);">Garnet · Red &nbsp;|&nbsp; Emerald · Green &nbsp;|&nbsp; Topaz · Yellow — tap a swatch to colour that team.</label>
+          <h3>HOUSE PALETTES</h3>
+          <p class="settings-hint">Garnet · Red &nbsp;|&nbsp; Emerald · Green &nbsp;|&nbsp; Topaz · Yellow. Choosing a swatch applies to the live scoreboard straight away; Cancel does not undo it.</p>
           <div class="house-preset-row">
             <span class="house-preset-label">HOME</span>
             <button type="button" class="house-swatch" data-side="home" data-house="garnet" data-name="GARNET" data-short="GAR" data-color="#e11d48" data-secondary-color="#7f1d1d" data-hotkey="KeyG" title="Set home team to GARNET (G)"><span class="house-swatch-color" style="background:#e11d48"></span>GARNET</button>
@@ -523,13 +708,13 @@
         </div>
 
         <!-- Tab: Goal Automation Workflow -->
-        <div class="tab-pane" id="tab-workflow">
+        <div class="tab-pane" id="tab-workflow" role="tabpanel">
           <div class="checkbox-row">
             <input type="checkbox" id="cfg-goal-anim" checked>
             <label for="cfg-goal-anim">Trigger Goal Graphic Animation</label>
           </div>
           <div class="form-group">
-            <label>CELEBRATION DURATION (SECONDS)</label>
+            <label for="cfg-celebration-dur">CELEBRATION DURATION (SECONDS)</label>
             <input type="number" id="cfg-celebration-dur" class="styled-input" value="3.0" step="0.5" min="0" max="15">
           </div>
           <div class="checkbox-row">
@@ -537,18 +722,18 @@
             <label for="cfg-capture-replay">Trigger Source Record replay save on goal</label>
           </div>
           <div class="form-group">
-            <label>CAPTURE SOURCE ID (replay.captureSources entry, e.g. main)</label>
+            <label for="cfg-replay-source-id">CAPTURE SOURCE ID (replay.captureSources entry, e.g. main)</label>
             <input type="text" id="cfg-replay-source-id" class="styled-input" placeholder="main">
           </div>
         </div>
 
         <!-- Tab: Hotkeys -->
-        <div class="tab-pane" id="tab-hotkeys">
+        <div class="tab-pane" id="tab-hotkeys" role="tabpanel">
           <table class="hotkey-table">
             <thead><tr><th>Action</th><th>Key</th></tr></thead>
             <tbody>
-              <tr><td>Garnet Goal</td><td><span class="hotkey-badge">G</span></td></tr>
-              <tr><td>Topaz Goal</td><td><span class="hotkey-badge">T</span></td></tr>
+              <tr><td id="hk-home-name">Home team goal</td><td><span class="hotkey-badge" id="hk-home-key">G</span></td></tr>
+              <tr><td id="hk-away-name">Away team goal</td><td><span class="hotkey-badge" id="hk-away-key">T</span></td></tr>
               <tr><td>Trigger Replay</td><td><span class="hotkey-badge">R</span></td></tr>
               <tr><td>Emergency Return to Live</td><td><span class="hotkey-badge">L</span></td></tr>
               <tr><td>Under Review (Quick)</td><td><span class="hotkey-badge">U</span></td></tr>
@@ -556,6 +741,7 @@
               <tr><td>Start / Pause Match Clock</td><td><span class="hotkey-badge">Space</span></td></tr>
             </tbody>
           </table>
+        </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -565,11 +751,17 @@
     </div>
   </div>
 
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+
   <!-- Scripts -->
+  <script src="js/ui.js"></script>
   <script src="js/match.js"></script>
   <script src="js/replay.js"></script>
   <script src="js/graphics.js"></script>
   <script src="js/settings.js"></script>
+  <script src="js/basketball.js"></script>
+  <script src="js/volleyball.js"></script>
+  <script src="js/navigation.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
