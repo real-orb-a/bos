@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090d16">
+  <title>BOS Browser Remote</title>
+  <link rel="stylesheet" href="remote.css">
+</head>
+<body>
+  <main class="remote-app">
+    <header>
+      <div class="brand">BOS <span>BROWSER REMOTE</span></div>
+      <div class="connection-status" id="connection-status">CONNECTING</div>
+    </header>
+
+    <section class="auth-panel" id="auth-panel">
+      <h1>Connect to match controls</h1>
+      <p>Enter the current browser remote password set in BOS.</p>
+      <form id="auth-form">
+        <label for="access-key">PASSWORD</label>
+        <div class="password-input-row">
+          <input id="access-key" type="password" autocomplete="current-password" required>
+          <button type="button" class="secondary password-visibility" id="btn-toggle-access-key" aria-pressed="false">SHOW</button>
+        </div>
+        <button type="submit">UNLOCK CONTROLS</button>
+      </form>
+      <p class="auth-error" id="auth-error" role="status"></p>
+    </section>
+
+    <section class="controls" id="controls" hidden>
+      <section class="score-panel">
+        <h1>SCORE</h1>
+        <p class="score-mode-status" id="score-mode-status">Loading score update mode…</p>
+        <div class="team-row" id="home-row">
+          <div class="team-info">
+            <span class="team-name" id="home-name">HOME</span>
+            <strong id="home-score">0</strong>
+          </div>
+          <div class="score-buttons">
+            <button data-team="home" data-amount="-1" aria-label="Decrease home score">−</button>
+            <button data-team="home" data-amount="1" aria-label="Increase home score">+</button>
+          </div>
+        </div>
+        <div class="team-row" id="away-row">
+          <div class="team-info">
+            <span class="team-name" id="away-name">AWAY</span>
+            <strong id="away-score">0</strong>
+          </div>
+          <div class="score-buttons">
+            <button data-team="away" data-amount="-1" aria-label="Decrease away score">−</button>
+            <button data-team="away" data-amount="1" aria-label="Increase away score">+</button>
+          </div>
+        </div>
+        <p class="set-tally" id="set-tally" hidden>SETS 0–0</p>
+        <div class="score-approval" id="score-approval">
+          <span id="pending-score-label">Stage score changes and send them to BOS for approval.</span>
+          <button id="btn-submit-score-request" disabled>REQUEST SCORE CHANGE</button>
+        </div>
+      </section>
+
+      <section class="timer-panel">
+        <div class="timer-card" id="match-clock-card">
+          <div class="timer-label">MATCH CLOCK</div>
+          <strong class="timer-value" id="match-clock">00:00</strong>
+          <span class="timer-period" id="match-period"></span>
+          <div class="timer-actions">
+            <button id="btn-clock-toggle">START</button>
+            <button class="secondary" id="btn-clock-reset">RESET</button>
+          </div>
+        </div>
+        <div class="timer-card offense-card" id="offense-card">
+          <div class="timer-label">OFFENSE TIMER</div>
+          <strong class="timer-value" id="offense-clock">00</strong>
+          <div class="timer-actions">
+            <button id="btn-offense-toggle">START</button>
+            <button class="secondary" id="btn-offense-reset">RESET</button>
+          </div>
+        </div>
+      </section>
+      <section class="clock-adjust-panel" id="clock-adjust-panel">
+        <h2>CLOCK ADJUSTMENT</h2>
+        <label for="clock-adjust-range">SET CURRENT CLOCK TIME</label>
+        <input id="clock-adjust-range" type="range" min="0" max="5400" step="1" value="0">
+        <div class="clock-adjust-row">
+          <input id="clock-adjust-value" type="text" inputmode="numeric" value="00:00" aria-label="Current match clock time (MM:SS)">
+          <button id="btn-set-clock">SET CLOCK</button>
+        </div>
+        <label for="clock-start-value">START TIME</label>
+        <div class="clock-adjust-row">
+          <input id="clock-start-value" type="text" inputmode="numeric" value="00:00" aria-label="Clock start time (MM:SS)">
+          <button id="btn-set-start-time">SET START TIME</button>
+        </div>
+      </section>
+      <section class="period-adjust-panel">
+        <h2>PERIOD LABEL</h2>
+        <div class="clock-adjust-row">
+          <input id="period-label-input" type="text" maxlength="24" value="1st Half" aria-label="Period label">
+          <button id="btn-set-period">SET PERIOD</button>
+        </div>
+      </section>
+      <p class="control-feedback" id="control-feedback" role="status"></p>
+    </section>
+  </main>
+  <script src="remote.js"></script>
+</body>
+</html>

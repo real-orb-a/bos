@@ -20,21 +20,15 @@ class OBSClient extends EventEmitter {
     this.latencyMs = 0;
     this.currentScene = null;
     this.availableScenes = [];
-    // `known` is false until the real state has been read from OBS, so the UI never
-    // has to claim "not recording" for a connection it has not asked about yet.
-    this.streamStatus = { active: false, timecode: '00:00:00', known: false };
-    this.recordStatus = { active: false, timecode: '00:00:00', known: false };
-    this.lastError = null;
+    this.streamStatus = { active: false, timecode: '00:00:00' };
+    this.recordStatus = { active: false, timecode: '00:00:00' };
 
     this._bindEvents();
   }
 
   _bindEvents() {
     this.obs.on('ConnectionClosed', (data) => {
-      console.log('[OBSClient] Connection closed:', data && (data.code || data.message) ? { code: data.code, message: this._sanitize(data.message) } : data);
-      if (data && data.code && data.code !== 1000) {
-        this.lastError = this._classifyError({ code: data.code, message: data.message });
-      }
+      console.log('[OBSClient] Connection closed:', data);
       this._setDisconnected();
       if (this.configManager.get('obs.autoReconnect')) {
         this.scheduleReconnect();
@@ -48,13 +42,11 @@ class OBSClient extends EventEmitter {
 
     this.obs.on('StreamStateChanged', (data) => {
       this.streamStatus.active = data.outputActive;
-      this.streamStatus.known = true;
       this.emit('streamStatusChanged', this.streamStatus);
     });
 
     this.obs.on('RecordStateChanged', (data) => {
       this.recordStatus.active = data.outputActive;
-      this.recordStatus.known = true;
       this.emit('recordStatusChanged', this.recordStatus);
     });
   }
@@ -74,7 +66,6 @@ class OBSClient extends EventEmitter {
       await this.obs.connect(url, password);
       this.isConnected = true;
       this.isConnecting = false;
-      this.lastError = null;
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
@@ -87,10 +78,8 @@ class OBSClient extends EventEmitter {
         const { scenes } = await this.obs.call('GetSceneList');
         this.availableScenes = scenes.map(s => s.sceneName);
       } catch (e) {
-        console.warn('[OBSClient] Could not fetch initial scenes:', this._sanitize(e.message));
+        console.warn('[OBSClient] Could not fetch initial scenes:', e.message);
       }
-
-      await this._syncOutputStatus();
 
       this._startPing();
       this.emit('connected', { currentScene: this.currentScene, availableScenes: this.availableScenes });
@@ -98,8 +87,7 @@ class OBSClient extends EventEmitter {
     } catch (err) {
       this.isConnecting = false;
       this._setDisconnected();
-      this.lastError = this._classifyError(err);
-      console.warn(`[OBSClient] Failed to connect to OBS (${this.lastError.message}). Will keep retrying.`);
+      console.warn(`[OBSClient] Failed to connect to OBS (${err.message}). Will keep retrying.`);
 
       if (this.configManager.get('obs.autoReconnect')) {
         this.scheduleReconnect();
@@ -127,9 +115,6 @@ class OBSClient extends EventEmitter {
   _setDisconnected() {
     this.isConnected = false;
     this.isConnecting = false;
-    // The last values are no longer trustworthy once the link is gone.
-    this.streamStatus.known = false;
-    this.recordStatus.known = false;
     this._stopPing();
     this.emit('disconnected');
   }
@@ -168,76 +153,6 @@ class OBSClient extends EventEmitter {
     }
   }
 
-  /** Read the real streaming/recording state from OBS (never assume it). */
-  async _syncOutputStatus() {
-    try {
-      const stream = await this.obs.call('GetStreamStatus');
-      this.streamStatus = {
-        active: !!stream.outputActive,
-        timecode: stream.outputTimecode || '00:00:00',
-        known: true
-      };
-    } catch (e) {
-      this.streamStatus.known = false;
-      console.warn('[OBSClient] Could not read stream status:', this._sanitize(e.message));
-    }
-    try {
-      const record = await this.obs.call('GetRecordStatus');
-      this.recordStatus = {
-        active: !!record.outputActive,
-        timecode: record.outputTimecode || '00:00:00',
-        known: true
-      };
-    } catch (e) {
-      this.recordStatus.known = false;
-      console.warn('[OBSClient] Could not read record status:', this._sanitize(e.message));
-    }
-    this.emit('streamStatusChanged', this.streamStatus);
-    this.emit('recordStatusChanged', this.recordStatus);
-  }
-
-  /** Remove the configured password from any text before it is logged or shown. */
-  _sanitize(text) {
-    let out = String(text === undefined || text === null ? '' : text);
-    const password = this.configManager.get('obs.password');
-    if (password && out.includes(password)) {
-      out = out.split(password).join('[hidden]');
-    }
-    return out;
-  }
-
-  /** Turn a raw connection error into an operator-readable category. Never includes secrets. */
-  _classifyError(err) {
-    const code = err && err.code;
-    const raw = this._sanitize((err && err.message) || err);
-    const host = this.configManager.get('obs.host') || 'localhost';
-    const port = this.configManager.get('obs.port') || 4455;
-    let category = 'UNKNOWN';
-    let message = raw || 'Unknown connection error.';
-
-    if (code === 4009 || /authentication/i.test(raw)) {
-      category = 'AUTH_FAILED';
-      message = 'OBS rejected the WebSocket password. Check the password in Settings and in OBS (Tools → WebSocket Server Settings).';
-    } else if (code === 4010 || /rpc version/i.test(raw)) {
-      category = 'VERSION_MISMATCH';
-      message = 'OBS WebSocket version is not compatible with this version of BOS (OBS 28 or newer is required).';
-    } else if (/ECONNREFUSED/i.test(raw) || code === 'ECONNREFUSED') {
-      category = 'UNREACHABLE';
-      message = `Could not reach OBS at ${host}:${port}. Check that OBS is running and the WebSocket server is enabled on that port.`;
-    } else if (code === 1006 || code === 1001 || code === 1011) {
-      category = 'CONNECTION_LOST';
-      message = 'The connection to OBS was lost. BOS will keep trying to reconnect.';
-    } else if (/ENOTFOUND|EAI_AGAIN/i.test(raw)) {
-      category = 'HOST_NOT_FOUND';
-      message = `The OBS host "${host}" could not be found. Check the host name in Settings.`;
-    } else if (/ETIMEDOUT|timed? ?out|EHOSTUNREACH|ENETUNREACH/i.test(raw)) {
-      category = 'TIMEOUT';
-      message = `OBS at ${host}:${port} did not respond in time. Check the host, port, and firewall.`;
-    }
-
-    return { category, message, code: code === undefined ? null : code, at: Date.now() };
-  }
-
   async call(requestType, requestData) {
     if (!this.isConnected) {
       throw new Error('OBS is not connected.');
@@ -253,8 +168,7 @@ class OBSClient extends EventEmitter {
       availableScenes: this.availableScenes,
       latencyMs: this.latencyMs,
       stream: this.streamStatus,
-      record: this.recordStatus,
-      lastError: this.lastError ? { ...this.lastError } : null
+      record: this.recordStatus
     };
   }
 }

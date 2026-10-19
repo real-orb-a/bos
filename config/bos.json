@@ -2,6 +2,7 @@
   "obs": {
     "host": "localhost",
     "port": 4455,
+    "password": "Adam@123",
     "autoReconnect": true,
     "reconnectIntervalMs": 3000
   },
@@ -12,16 +13,16 @@
       "color": "#eab308",
       "secondaryColor": "#713f12",
       "hotkey": "KeyT",
-      "score": 0,
+      "score": 13,
       "logo": ""
     },
     "away": {
-      "name": "EMERALD",
-      "short": "EME",
-      "color": "#10b981",
-      "secondaryColor": "#064e3b",
-      "hotkey": "KeyE",
-      "score": 0,
+      "name": "GARNET",
+      "short": "GAR",
+      "color": "#e11d48",
+      "secondaryColor": "#7f1d1d",
+      "hotkey": "KeyG",
+      "score": 35,
       "logo": ""
     }
   },
@@ -64,17 +65,13 @@
     "wsPort": 8088,
     "defaultLowerThirdDuration": 5,
     "animationStyle": "slide-in",
-    "lowerThirdColor": "#eab308"
+    "lowerThirdColor": "#eab308",
+    "remoteControlKey": "MEDIAUNIT123",
+    "remoteImmediateScore": false
   },
   "transitions": {
     "defaultTransition": "Fade",
     "durationMs": 300
-  },
-  "match": {
-    "timerMode": "stopwatch",
-    "additionalTimeMode": "automatic",
-    "periodLabel": "1st Half",
-    "regulationMinutes": 90
   },
   "hotkeys": {
     "garnetGoal": "KeyG",
@@ -83,16 +80,28 @@
     "returnLive": "KeyL",
     "underReview": "KeyU",
     "hideLowerThird": "KeyH",
-    "clockToggle": "Space",
-    "sequencePrevious": "BracketLeft",
-    "sequenceNext": "BracketRight"
+    "clockToggle": "Space"
   },
   "goalWorkflow": {
-    "showGoalAnimation": true,
+    "showGoalAnimation": false,
     "goalAnimationDuration": 3,
     "celebrationDurationSeconds": 3,
-    "captureReplayOnGoal": true,
+    "captureReplayOnGoal": false,
     "replaySourceId": "",
-    "autoReturnLive": true
+    "autoReturnLive": true,
+    "homeGoalActionLabel": "GOAL",
+    "awayGoalActionLabel": "GOAL"
+  },
+  "match": {
+    "timerMode": "countdown",
+    "additionalTimeMode": "approval",
+    "bestOfSets": 3,
+    "completedSets": [],
+    "periodLabel": "Q2",
+    "homeSetsWon": 0,
+    "awaySetsWon": 0,
+    "offenseSeconds": 24,
+    "offenseTimerSeconds": 24,
+    "startSeconds": 120
   }
 }

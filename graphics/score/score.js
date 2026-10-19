@@ -9,11 +9,15 @@
   const awayBarEl = document.getElementById('away-bar');
   const clockEl = document.getElementById('clock-display');
   const periodEl = document.getElementById('period-display');
+  const setsEl = document.getElementById('sets-display');
   const stoppageEl = document.getElementById('stoppage-display');
+  const offenseEl = document.getElementById('offense-display');
+  const offenseClockEl = document.getElementById('offense-clock-display');
   const scorebug = document.getElementById('score-bug');
 
   let currentHomeScore = 0;
   let currentAwayScore = 0;
+  let currentTimerMode = null;
 
   function updateDisplay(data, anim = 'pop', changedTeam = null) {
     if (!data) return;
@@ -47,10 +51,21 @@
     if (data.clock) {
       applyClock(data.clock);
     }
+    if (data.sets) applySets(data.sets);
+    if (data.offense) applyOffense(data.offense);
+  }
+
+  function applySets(sets) {
+    setsEl.textContent = `SETS ${sets.homeSets}-${sets.awaySets}`;
   }
 
   function applyClock(clock) {
     clockEl.textContent = clock.formatted || '00:00';
+    currentTimerMode = clock.mode;
+    scorebug.classList.toggle('volleyball-mode', clock.mode === 'none');
+    if (clock.offenseTimer || clock.offense) {
+      applyOffense(clock.offenseTimer || clock.offense);
+    }
     if (clock.period) {
       periodEl.textContent = clock.period.toUpperCase();
     }
@@ -61,6 +76,14 @@
     } else {
       stoppageEl.classList.add('hidden');
     }
+  }
+
+  function applyOffense(offense) {
+    const active = currentTimerMode === 'countdown' &&
+      (!!offense.active || Number(offense.limitSeconds) > 0);
+    offenseEl.classList.toggle('hidden', !active);
+    scorebug.classList.toggle('offense-active', active);
+    offenseClockEl.textContent = offense.seconds ?? offense.elapsedSeconds ?? 0;
   }
 
   function triggerAnimation(el, animType) {
@@ -84,6 +107,8 @@
           if (msg.score) {
             updateDisplay(msg.score, 'none');
           }
+          if (msg.score && msg.score.sets) applySets(msg.score.sets);
+          if (msg.offense) applyOffense(msg.offense);
           setScorebugVisible(msg.scorebugVisible !== false);
         } else if (msg.type === 'SCORE_UPDATE') {
           updateDisplay(msg, msg.animation || 'pop', msg.changedTeam);
@@ -93,6 +118,10 @@
           if (msg.clock) {
             applyClock(msg.clock);
           }
+        } else if (msg.type === 'SETS_UPDATE') {
+          if (msg.sets) applySets(msg.sets);
+        } else if (msg.type === 'OFFENSE_UPDATE') {
+          if (msg.offense) applyOffense(msg.offense);
         }
       } catch (err) {
         console.error('[ScoreBug] Message parse error:', err);

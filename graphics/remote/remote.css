@@ -1,0 +1,371 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  background: #090d16;
+  color: #f8fafc;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 300px;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at top, #162237 0%, #090d16 60%);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: #0ea5e9;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+.remote-app {
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 20px 16px 36px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.brand {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.brand span {
+  display: block;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+}
+
+.connection-status {
+  color: #fbbf24;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.connection-status.connected {
+  color: #4ade80;
+}
+
+.auth-panel,
+.score-panel,
+.timer-card {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.25);
+}
+
+.auth-panel {
+  padding: 22px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+p {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+form {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+label,
+.timer-label {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #334155;
+  border-radius: 9px;
+  outline: none;
+  background: #070b12;
+  color: #fff;
+  padding: 0 12px;
+}
+
+input:focus {
+  border-color: #38bdf8;
+}
+
+.password-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.password-input-row input {
+  min-width: 0;
+  flex: 1;
+}
+
+.password-visibility {
+  min-width: 68px;
+  padding: 0 8px;
+}
+
+.auth-error {
+  min-height: 18px;
+  margin-bottom: 0;
+  color: #fca5a5;
+}
+
+.controls {
+  display: grid;
+  gap: 14px;
+}
+
+.score-panel {
+  padding: 18px;
+}
+
+.score-panel h1 {
+  margin-bottom: 14px;
+  color: #94a3b8;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+
+.score-mode-status {
+  margin: -5px 0 10px;
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: center;
+}
+
+.team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.13);
+}
+
+.team-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  gap: 12px;
+}
+
+.team-name {
+  overflow: hidden;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-info strong {
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.score-buttons button {
+  width: 52px;
+  min-height: 48px;
+  background: #1e293b;
+  font-size: 23px;
+}
+
+.score-buttons button:last-child {
+  background: #0369a1;
+}
+
+.set-tally {
+  margin: 12px 0 0;
+  color: #38bdf8;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.score-approval {
+  display: grid;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.score-approval span {
+  color: #94a3b8;
+  font-size: 11px;
+  text-align: center;
+}
+
+.score-approval button {
+  background: #15803d;
+}
+
+.score-approval button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.timer-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.timer-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 10px;
+}
+
+.clock-adjust-panel,
+.period-adjust-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.clock-adjust-panel h2,
+.period-adjust-panel h2 {
+  margin: 0 0 2px;
+  color: #cbd5e1;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+}
+
+.clock-adjust-panel label {
+  margin-top: 3px;
+}
+
+#clock-adjust-range {
+  min-height: 28px;
+  padding: 0;
+  accent-color: #0ea5e9;
+  cursor: pointer;
+}
+
+.clock-adjust-row {
+  display: flex;
+  gap: 8px;
+}
+
+.clock-adjust-row input {
+  min-width: 0;
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.clock-adjust-row button {
+  min-height: 48px;
+  padding: 0 12px;
+  font-size: 10px;
+}
+
+.clock-adjust-panel [hidden] {
+  display: none !important;
+}
+
+.timer-value {
+  margin-top: 8px;
+  color: #38bdf8;
+  font-family: ui-monospace, monospace;
+  font-size: clamp(25px, 8vw, 36px);
+  font-variant-numeric: tabular-nums;
+}
+
+.offense-card .timer-value {
+  color: #fbbf24;
+}
+
+.timer-period {
+  min-height: 15px;
+  margin-top: 3px;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.timer-actions {
+  display: flex;
+  width: 100%;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.timer-actions button {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+.timer-actions button.secondary {
+  border: 1px solid #334155;
+  background: #111827;
+  color: #cbd5e1;
+}
+
+.control-feedback {
+  min-height: 18px;
+  margin: 0;
+  text-align: center;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 380px) {
+  .timer-panel {
+    grid-template-columns: 1fr;
+  }
+}

@@ -17,16 +17,29 @@ class MessagesManager extends EventEmitter {
     ];
   }
 
-  getPresets() {
-    return this.presets;
+  getPresets(teams = {}) {
+    const homeName = teams.home?.name || 'HOME';
+    const awayName = teams.away?.name || 'AWAY';
+    const timeoutPresets = [homeName, awayName].map((teamName, index) => ({
+      id: `timeout_${index === 0 ? 'home' : 'away'}`,
+      buttonTitle: `TIMEOUT CALLED — ${teamName}`,
+      title: 'TIMEOUT CALLED',
+      subtitle: `TIMEOUT CALLED BY ${teamName}`,
+      style: 'standard',
+      duration: 6
+    }));
+    return [...this.presets, ...timeoutPresets];
   }
 
   enqueue(item) {
     const queueItem = {
       id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      title: item.title,
+      title: item.title || 'MESSAGE',
       subtitle: item.subtitle || '',
-      duration: item.duration || 5,
+      badge: item.badge || '',
+      value: item.value || '',
+      color: item.color || '',
+      duration: Number.isFinite(Number(item.duration)) ? Math.max(0, Number(item.duration)) : 5,
       position: item.position || 'bottom-left',
       style: 'standard',
       timestamp: Date.now()

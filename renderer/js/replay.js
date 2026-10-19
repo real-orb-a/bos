@@ -5,7 +5,6 @@
 
 window.ReplayModule = (function() {
   const statePill = document.getElementById('replay-state-pill');
-  const requestDot = document.getElementById('replay-request-dot');
   const requestText = document.getElementById('replay-request-text');
   const requestDetail = document.getElementById('replay-request-detail');
   const sourceButtons = document.getElementById('replay-source-buttons');
@@ -35,7 +34,6 @@ window.ReplayModule = (function() {
     } catch (e) {
       console.error('Error triggering replay save:', e);
       requestText.textContent = 'Replay trigger failed (see console)';
-      window.BOSUI.toast('The replay save request failed. Check the OBS connection.', { type: 'error' });
     }
   }
 
@@ -63,15 +61,12 @@ window.ReplayModule = (function() {
     else if (st === 'TRIGGERED') statePill.classList.add('ok');
     else if (st === 'ERROR') statePill.classList.add('error');
 
-    requestDot.className = 'replay-request-dot';
     if (st === 'TRIGGERING') {
       clearTimeout(triggerResetTimer);
       triggerResetTimer = null;
-      requestDot.classList.add('busy');
       requestText.textContent = 'SAVING REPLAY';
       requestDetail.textContent = lastTriggeredText;
     } else if (st === 'TRIGGERED') {
-      requestDot.classList.add('ok');
       requestText.textContent = 'REPLAY TRIGGERED';
       requestDetail.textContent = lastTriggeredText;
       if (!triggerResetTimer) {
@@ -81,11 +76,9 @@ window.ReplayModule = (function() {
         }, 1600);
       }
     } else if (st === 'ERROR') {
-      requestDot.classList.add('error');
       requestText.textContent = 'REPLAY TRIGGER FAILED';
       requestDetail.textContent = status.lastError || lastTriggeredText;
     } else {
-      requestDot.classList.add('idle');
       requestText.textContent = status.enabled ? 'READY' : 'REPLAY CAPTURE DISABLED';
       requestDetail.textContent = lastTriggeredText;
     }
@@ -103,10 +96,7 @@ window.ReplayModule = (function() {
       const btn = document.createElement('button');
       btn.className = 'replay-source-btn';
       btn.title = `${src.hotkeyName}${src.contextName ? ' · ' + src.contextName : ''}`;
-      btn.type = 'button';
-      const dot = document.createElement('span');
-      dot.className = 'replay-source-dot';
-      btn.append(dot, document.createTextNode(` SAVE ${src.name || src.id}`));
+      btn.textContent = `SAVE ${src.name || src.id}`;
       btn.addEventListener('click', () => doCapture({ sourceId: src.id }));
       sourceButtons.appendChild(btn);
     });

@@ -2,6 +2,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const WebSocket = require('ws');
 
 console.log('--- BOS Smoke Test ---');
 
@@ -202,6 +203,16 @@ assertClock('zero-duration message remains on air until explicitly hidden',
   graphics.lowerThird.getState().isVisible && graphics.lowerThird.getState().remainingSeconds === 0);
 assertClock('notice presets all use standard style',
   graphics.messages.getPresets().every(preset => preset.style === 'standard'));
+score.updateTeams({ home: { name: 'HOME TEST' }, away: { name: 'AWAY TEST' } });
+const timeoutPresets = graphics.messages.getPresets(score.getScore()).filter(preset => preset.id.startsWith('timeout_'));
+assertClock('timeout quick messages track the two configured team names',
+  timeoutPresets.length === 2 &&
+  timeoutPresets[0].buttonTitle === 'TIMEOUT CALLED — HOME TEST' &&
+  timeoutPresets[0].title === 'TIMEOUT CALLED' &&
+  timeoutPresets[0].subtitle === 'TIMEOUT CALLED BY HOME TEST' &&
+  timeoutPresets[1].buttonTitle === 'TIMEOUT CALLED — AWAY TEST' &&
+  timeoutPresets[1].subtitle === 'TIMEOUT CALLED BY AWAY TEST');
+score.updateTeams({ home: { name: 'GARNET' }, away: { name: 'TOPAZ' } });
 const queuedNotice = graphics.messages.enqueue({ title: 'QUEUED STYLE TEST', style: 'f1-banner', duration: 0 });
 assertClock('queued notices always use standard style', queuedNotice.style === 'standard');
 assertClock('queued message accepts zero duration for manual dismissal', queuedNotice.duration === 0);
@@ -263,6 +274,15 @@ assertClock('overlay finishes at 02:00 and the clock stops',
 
 // 3. Countdown mode reaches 00:00 and auto-stops with no additional time set.
 match.setTimerMode('countdown');
+assertClock('basketball offense timer defaults to 24 seconds',
+  match.getOffenseClockState().active && match.getOffenseClockState().seconds === 24);
+match.startOffenseClock();
+match._tick();
+assertClock('offense timer counts down independently',
+  match.getOffenseClockState().running && match.getOffenseClockState().seconds === 23);
+match.resetOffenseClock();
+assertClock('offense timer reset restores its configured duration',
+  !match.getOffenseClockState().running && match.getOffenseClockState().seconds === 24);
 match.setClock({ stoppageMinutes: 0 });
 assertClock('countdown starts from the set time', match.getClockState().formatted === '01:00');
 match.startClock();
@@ -354,6 +374,206 @@ match.setTimerMode('stopwatch');
 match.resetClock();
 console.log('✓ Match, message, and volleyball assertions complete.');
 
+let remoteFailures = 0;
+const assertRemote = (label, condition) => {
+  if (condition) {
+    console.log('✓ Remote:', label);
+  } else {
+    remoteFailures++;
+    console.error('✗ Remote:', label);
+  }
+};
+const waitForSocketMessage = (socket, type, predicate = () => true) => new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => {
+    socket.off('message', onMessage);
+    reject(new Error(`Timed out waiting for ${type}`));
+  }, 3000);
+  const onMessage = raw => {
+    const message = JSON.parse(raw.toString());
+    if (message.type !== type || !predicate(message)) return;
+    clearTimeout(timeout);
+    socket.off('message', onMessage);
+    resolve(message);
+  };
+  socket.on('message', onMessage);
+});
+const waitForSocketEvent = (socket, event) => new Promise(resolve => socket.once(event, resolve));
+const waitForSocketOpen = socket => socket.readyState === WebSocket.OPEN
+  ? Promise.resolve()
+  : waitForSocketEvent(socket, 'open');
+
+const remoteValidation = (async () => {
+  await workflowValidation;
+  let queueUpdates = 0;
+  const onQueueUpdated = () => { queueUpdates++; };
+  graphics.on('queueUpdated', onQueueUpdated);
+  const queuedForAir = graphics.enqueueMessage({ title: 'QUEUE START TEST', duration: 0 });
+  await new Promise(resolve => setTimeout(resolve, 600));
+  assertRemote('queue changes notify the dashboard and queued messages air when idle',
+    queueUpdates > 0 && graphics.lowerThird.getState().currentData?.title === 'QUEUE START TEST');
+  graphics.off('queueUpdated', onQueueUpdated);
+  graphics.hideLowerThird();
+  if (!graphics.httpServer.listening) {
+    await new Promise((resolve, reject) => {
+      graphics.httpServer.once('listening', resolve);
+      graphics.httpServer.once('error', reject);
+    });
+  }
+
+  const info = graphics.getRemoteControlInfo();
+  assertRemote('a random key is generated and served on the actual HTTP port',
+    info.password.length >= 8 && info.port > 0);
+  assertRemote('immediate score changes default to disabled and persist in config',
+    info.immediateScore === false && cfg.get('graphics.remoteImmediateScore') === false);
+
+  const deniedSocket = new WebSocket(`ws://127.0.0.1:${info.port}/ws`);
+  const deniedInitial = waitForSocketMessage(deniedSocket, 'INITIAL_SYNC');
+  await waitForSocketOpen(deniedSocket);
+  await deniedInitial;
+  const deniedAuth = waitForSocketMessage(deniedSocket, 'REMOTE_AUTH_RESULT');
+  deniedSocket.send(JSON.stringify({ type: 'REMOTE_AUTH', password: 'incorrect-password' }));
+  const denial = await deniedAuth;
+  assertRemote('invalid password is rejected', !denial.authenticated);
+  deniedSocket.close();
+
+  const socket = new WebSocket(`ws://127.0.0.1:${info.port}/ws`);
+  try {
+    const initialSync = waitForSocketMessage(socket, 'INITIAL_SYNC');
+    await waitForSocketOpen(socket);
+    await initialSync;
+
+    const before = score.getScore().home.score;
+    const unauthenticatedCommand = waitForSocketMessage(socket, 'REMOTE_COMMAND_RESULT');
+    socket.send(JSON.stringify({
+      type: 'REMOTE_COMMAND',
+      action: 'SCORE_APPLY',
+      homeDelta: 1,
+      awayDelta: 0
+    }));
+    const blockedCommand = await unauthenticatedCommand;
+    assertRemote('score approval is blocked before authentication',
+      !blockedCommand.ok && score.getScore().home.score === before);
+
+    const authResponse = waitForSocketMessage(socket, 'REMOTE_AUTH_RESULT');
+    socket.send(JSON.stringify({ type: 'REMOTE_AUTH', password: info.password }));
+    const authResult = await authResponse;
+    assertRemote('configured password authenticates the remote', authResult.authenticated);
+
+    const scoreProposalResponse = waitForSocketMessage(socket, 'REMOTE_COMMAND_RESULT',
+      result => result.action === 'SCORE_PROPOSAL');
+    socket.send(JSON.stringify({
+      type: 'REMOTE_COMMAND',
+      action: 'SCORE_PROPOSAL',
+      homeDelta: 1,
+      awayDelta: 0
+    }));
+    const scoreProposal = await scoreProposalResponse;
+    assertRemote('remote score adjustment is queued without changing the live score',
+      scoreProposal.ok && score.getScore().home.score === before &&
+      graphics.getRemoteScoreProposals().some(proposal => proposal.id === scoreProposal.proposalId));
+
+    const scoreUpdate = waitForSocketMessage(socket, 'SCORE_UPDATE', update => update.home.score === before + 1);
+    graphics.approveRemoteScoreProposal(scoreProposal.proposalId);
+    await scoreUpdate;
+    assertRemote('approved score change is applied by the server', score.getScore().home.score === before + 1);
+
+    const rejectedProposalResponse = waitForSocketMessage(socket, 'REMOTE_COMMAND_RESULT',
+      result => result.action === 'SCORE_PROPOSAL');
+    socket.send(JSON.stringify({
+      type: 'REMOTE_COMMAND',
+      action: 'SCORE_PROPOSAL',
+      homeDelta: 1,
+      awayDelta: 0
+    }));
+    const rejectedProposal = await rejectedProposalResponse;
+    graphics.rejectRemoteScoreProposal(rejectedProposal.proposalId);
+    assertRemote('BOS can reject a remote score request without changing scores',
+      score.getScore().home.score === before + 1 &&
+      !graphics.getRemoteScoreProposals().some(proposal => proposal.id === rejectedProposal.proposalId));
+
+    const blockedImmediate = waitForSocketMessage(socket, 'REMOTE_COMMAND_RESULT');
+    socket.send(JSON.stringify({
+      type: 'REMOTE_COMMAND',
+      action: 'SCORE_ADJUST',
+      team: 'away',
+      amount: 1
+    }));
+    assertRemote('immediate score changes are rejected while the BOS toggle is off',
+      !(await blockedImmediate).ok);
+
+    const scoreModeUpdate = waitForSocketMessage(socket, 'REMOTE_SCORE_MODE', mode => mode.immediate);
+    graphics.setRemoteImmediateScore(true);
+    await scoreModeUpdate;
+    assertRemote('BOS immediate score toggle persists and syncs to the remote',
+      cfg.get('graphics.remoteImmediateScore') === true && graphics.getRemoteControlInfo().immediateScore === true);
+
+    const beforeAway = score.getScore().away.score;
+    const immediateUpdate = waitForSocketMessage(socket, 'SCORE_UPDATE', update => update.away.score === beforeAway + 1);
+    socket.send(JSON.stringify({
+      type: 'REMOTE_COMMAND',
+      action: 'SCORE_ADJUST',
+      team: 'away',
+      amount: 1
+    }));
+    await immediateUpdate;
+    assertRemote('immediate score command updates server state directly', score.getScore().away.score === beforeAway + 1);
+
+    const scoreModeDisabled = waitForSocketMessage(socket, 'REMOTE_SCORE_MODE', mode => !mode.immediate);
+    graphics.setRemoteImmediateScore(false);
+    await scoreModeDisabled;
+
+    match.setClock({ seconds: 0, regulationMinutes: 90, stoppageMinutes: 0 });
+    const clockUpdate = waitForSocketMessage(socket, 'CLOCK_UPDATE', clock => clock.clock.running);
+    socket.send(JSON.stringify({ type: 'REMOTE_COMMAND', action: 'CLOCK_TOGGLE' }));
+    await clockUpdate;
+    assertRemote('authenticated client can start the match clock', match.getClockState().running);
+    match.pauseClock();
+
+    const startTimeResult = waitForSocketMessage(socket, 'REMOTE_COMMAND_RESULT',
+      result => result.action === 'CLOCK_SET_START');
+    socket.send(JSON.stringify({
+      type: 'REMOTE_COMMAND',
+      action: 'CLOCK_SET_START',
+      seconds: 90
+    }));
+    assertRemote('remote can set the configured clock start time',
+      (await startTimeResult).ok && match.getClockState().startSeconds === 90 &&
+      match.getClockState().elapsedSeconds === 90);
+
+    const adjustedClockResult = waitForSocketMessage(socket, 'REMOTE_COMMAND_RESULT',
+      result => result.action === 'CLOCK_SET');
+    socket.send(JSON.stringify({ type: 'REMOTE_COMMAND', action: 'CLOCK_SET', seconds: 150 }));
+    assertRemote('remote can adjust the live clock value',
+      (await adjustedClockResult).ok && match.getClockState().elapsedSeconds === 150);
+
+    const periodResult = waitForSocketMessage(socket, 'REMOTE_COMMAND_RESULT',
+      result => result.action === 'CLOCK_SET_PERIOD');
+    socket.send(JSON.stringify({ type: 'REMOTE_COMMAND', action: 'CLOCK_SET_PERIOD', period: 'Q3' }));
+    assertRemote('remote can update the period label',
+      (await periodResult).ok && match.getClockState().period === 'Q3');
+
+    const authRequired = waitForSocketMessage(socket, 'REMOTE_AUTH_REQUIRED');
+    const changedPassword = 'updated-remote-password';
+    graphics.setRemoteControlPassword(changedPassword);
+    await authRequired;
+    assertRemote('changing the stored password revokes current remote authentication',
+      cfg.get('graphics.remoteControlKey') === changedPassword);
+
+    const oldPasswordRejected = waitForSocketMessage(socket, 'REMOTE_AUTH_RESULT');
+    socket.send(JSON.stringify({ type: 'REMOTE_AUTH', password: info.password }));
+    assertRemote('old password no longer authenticates', !(await oldPasswordRejected).authenticated);
+
+    const newPasswordAccepted = waitForSocketMessage(socket, 'REMOTE_AUTH_RESULT');
+    socket.send(JSON.stringify({ type: 'REMOTE_AUTH', password: changedPassword }));
+    assertRemote('new stored password authenticates', (await newPasswordAccepted).authenticated);
+  } finally {
+    socket.close();
+  }
+})().catch(error => {
+  remoteFailures++;
+  console.error('✗ Remote validation failed:', error.message);
+});
+
 const check = () => {
   try {
     JSON.stringify(cfg.get());
@@ -377,7 +597,11 @@ const check = () => {
     console.error(`${workflowFailures} workflow assertion(s) FAILED`);
     process.exit(1);
   }
+  if (remoteFailures > 0) {
+    console.error(`${remoteFailures} remote assertion(s) FAILED`);
+    process.exit(1);
+  }
   console.log('All backend modules loaded and validated successfully!');
   process.exit(0);
 };
-setTimeout(() => Promise.resolve(workflowValidation).finally(check), 500);
+setTimeout(() => Promise.all([workflowValidation, remoteValidation]).finally(check), 500);

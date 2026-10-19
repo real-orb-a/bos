@@ -34,6 +34,7 @@ class MatchEngine extends EventEmitter {
     // Clock state
     //   timerMode 'stopwatch' counts UP to the regulation ("set") time — football style.
     //   timerMode 'countdown' counts DOWN to 00:00 — basketball-style timing.
+    //   timerMode 'none' disables the clock for untimed matches.
     //   Once the set time is reached, if additional (stoppage) time has been set the
     //   main clock FREEZES at the set time and a 00:00 overlay below it counts the
     //   added time until the allotted stoppage is used up, then the clock stops.
@@ -45,7 +46,8 @@ class MatchEngine extends EventEmitter {
     this.inStoppage = false;
     this.awaitingStoppageApproval = false;
     this.additionalTimeMode = this.config.get('match.additionalTimeMode') === 'approval' ? 'approval' : 'automatic';
-    this.timerMode = this.config.get('match.timerMode') === 'countdown' ? 'countdown' : 'stopwatch';
+    const configuredTimerMode = this.config.get('match.timerMode');
+    this.timerMode = ['countdown', 'none'].includes(configuredTimerMode) ? configuredTimerMode : 'stopwatch';
     const regulationMinutes = parseInt(this.config.get('match.regulationMinutes'), 10);
     this.regulationSeconds = (Number.isFinite(regulationMinutes) && regulationMinutes > 0 ? regulationMinutes : 90) * 60;
     const configuredStartSeconds = parseInt(this.config.get('match.startSeconds'), 10);
@@ -55,7 +57,29 @@ class MatchEngine extends EventEmitter {
       : (this.timerMode === 'countdown' ? this.regulationSeconds : 0);
     this.clockInterval = null;
 
+    const configuredOffenseSeconds = parseInt(this.config.get('match.offenseSeconds'), 10);
+    const configuredOffenseLimit = parseInt(this.config.get('match.offenseTimerSeconds'), 10);
+    this.offenseLimitSeconds = Number.isFinite(configuredOffenseLimit) && configuredOffenseLimit >= 0
+      ? configuredOffenseLimit
+      : (Number.isFinite(configuredOffenseSeconds) && configuredOffenseSeconds >= 0 ? configuredOffenseSeconds : 24);
+    this.offenseSeconds = Number.isFinite(configuredOffenseSeconds) && configuredOffenseSeconds >= 0
+      ? Math.min(configuredOffenseSeconds, this.offenseLimitSeconds)
+      : this.offenseLimitSeconds;
+    this.offenseRunning = false;
+
     this.elapsedSeconds = this.startSeconds;
+    const configuredBestOfSets = parseInt(this.config.get('match.bestOfSets'), 10);
+    this.bestOfSets = Number.isFinite(configuredBestOfSets) ? Math.min(9, Math.max(1, configuredBestOfSets)) : 3;
+    const configuredCompletedSets = this.config.get('match.completedSets');
+    this.completedSets = Array.isArray(configuredCompletedSets) ? configuredCompletedSets : [];
+    const homeSetsWon = this.config.get('match.homeSetsWon');
+    const awaySetsWon = this.config.get('match.awaySetsWon');
+    this.homeSetsWon = Number.isInteger(homeSetsWon)
+      ? Math.max(0, homeSetsWon)
+      : this.completedSets.filter(set => set.winner === 'home').length;
+    this.awaySetsWon = Number.isInteger(awaySetsWon)
+      ? Math.max(0, awaySetsWon)
+      : this.completedSets.filter(set => set.winner === 'away').length;
 
     this._startClockTick();
   }
@@ -65,7 +89,18 @@ class MatchEngine extends EventEmitter {
   }
 
   _tick() {
-    if (!this.clockRunning) return;
+    if (this.offenseRunning && this.offenseLimitSeconds > 0) {
+      this.offenseSeconds = Math.max(0, this.offenseSeconds - 1);
+      if (this.offenseSeconds <= 0) {
+        this.offenseSeconds = 0;
+        this.offenseRunning = false;
+        this.events.recordEvent('OFFENSE_TIMER_EXPIRED', { time: this.getOffenseClockState().formatted });
+      }
+      this.emit('offenseTick', this.getOffenseClockState());
+      this.emit('offenseChanged', this.getOffenseClockState());
+    }
+
+    if (!this.clockRunning || this.timerMode === 'none') return;
 
     if (this.inStoppage) {
       // ---- Additional time: main clock is frozen, the overlay keeps counting ----
@@ -145,15 +180,116 @@ class MatchEngine extends EventEmitter {
     return `${String(minute).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }
 
+  _formatClockSeconds(totalSeconds) {
+    const safeSeconds = Number.isFinite(totalSeconds) ? Math.max(0, totalSeconds) : 0;
+    const mins = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  getOffenseClockState() {
+    const offenseSeconds = Math.max(0, Number.isFinite(this.offenseSeconds) ? this.offenseSeconds : 0);
+    return {
+      running: this.offenseRunning,
+      elapsedSeconds: offenseSeconds,
+      seconds: offenseSeconds,
+      display: this._formatClockSeconds(offenseSeconds),
+      formatted: this._formatClockSeconds(offenseSeconds),
+      limitSeconds: this.offenseLimitSeconds,
+      active: this.offenseLimitSeconds > 0
+    };
+  }
+
+  setOffenseClock(secondsOrConfig = {}) {
+    const isObject = typeof secondsOrConfig === 'object' && secondsOrConfig !== null;
+    const configuredLimit = isObject ? (
+      secondsOrConfig.offenseLimitSeconds ??
+      secondsOrConfig.limitSeconds ??
+      secondsOrConfig.offenseTimerSeconds ??
+      secondsOrConfig.maxSeconds ??
+      null
+    ) : null;
+    const candidate = isObject
+      ? (secondsOrConfig.seconds ?? secondsOrConfig.offenseSeconds ?? secondsOrConfig.value ?? secondsOrConfig.totalSeconds ?? 0)
+      : secondsOrConfig;
+    const parsed = Number.parseInt(candidate, 10);
+    const nextValue = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    const nextLimit = configuredLimit !== null ? Math.max(0, Number.parseInt(configuredLimit, 10) || 0) : nextValue;
+
+    this.offenseLimitSeconds = Number.isFinite(nextLimit) ? nextLimit : 0;
+    this.offenseSeconds = nextValue > this.offenseLimitSeconds && this.offenseLimitSeconds > 0
+      ? this.offenseLimitSeconds
+      : nextValue;
+    if (!isObject || (candidate === 0 && configuredLimit === null)) {
+      this.offenseLimitSeconds = this.offenseSeconds;
+    }
+    this.offenseRunning = false;
+    this.config.set('match.offenseSeconds', this.offenseSeconds);
+    this.config.set('match.offenseTimerSeconds', this.offenseLimitSeconds);
+    this.emit('offenseChanged', this.getOffenseClockState());
+    return this.getOffenseClockState();
+  }
+
+  setOffenseTimer(secondsOrConfig) {
+    return this.setOffenseClock(secondsOrConfig);
+  }
+
+  setOffenseTime(secondsOrConfig) {
+    return this.setOffenseClock(secondsOrConfig);
+  }
+
+  startOffenseClock() {
+    if (this.offenseLimitSeconds <= 0) {
+      this.offenseRunning = false;
+      return this.getOffenseClockState();
+    }
+    this.offenseRunning = true;
+    this.offenseSeconds = Math.max(0, Math.min(this.offenseSeconds, this.offenseLimitSeconds));
+    this.emit('offenseChanged', this.getOffenseClockState());
+    return this.getOffenseClockState();
+  }
+
+  startOffenseTimer() {
+    return this.startOffenseClock();
+  }
+
+  pauseOffenseClock() {
+    this.offenseRunning = false;
+    this.emit('offenseChanged', this.getOffenseClockState());
+    return this.getOffenseClockState();
+  }
+
+  pauseOffenseTimer() {
+    return this.pauseOffenseClock();
+  }
+
+  toggleOffenseClock() {
+    if (this.offenseRunning) {
+      return this.pauseOffenseClock();
+    }
+    return this.startOffenseClock();
+  }
+
+  resetOffenseClock() {
+    this.offenseSeconds = this.offenseLimitSeconds;
+    this.offenseRunning = false;
+    this.emit('offenseChanged', this.getOffenseClockState());
+    return this.getOffenseClockState();
+  }
+
   getClockState() {
     const mins = Math.floor(this.elapsedSeconds / 60);
     const secs = this.elapsedSeconds % 60;
-    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    const formatted = this.timerMode === 'none'
+      ? 'NO TIME'
+      : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    const offenseState = this.getOffenseClockState();
     return {
       running: this.clockRunning,
       elapsedSeconds: this.elapsedSeconds,
       formatted,
       period: this.period,
+      startSeconds: this.startSeconds,
       stoppageTime: this.stoppageTimeMinutes > 0 ? `+${this.stoppageTimeMinutes}` : '',
       mode: this.timerMode,
       regulationSeconds: this.regulationSeconds,
@@ -162,11 +298,17 @@ class MatchEngine extends EventEmitter {
       awaitingStoppageApproval: this.awaitingStoppageApproval,
       stoppageMinutes: this.stoppageTimeMinutes,
       stoppageElapsedSeconds: this.stoppageElapsedSeconds,
-      stoppageDisplay: this.inStoppage ? this._formatStoppage() : ''
+      stoppageDisplay: this.inStoppage ? this._formatStoppage() : '',
+      offenseRunning: this.offenseRunning,
+      offenseSeconds: offenseState.seconds,
+      offenseDisplay: offenseState.display,
+      offenseTimer: offenseState,
+      offense: offenseState
     };
   }
 
   startClock() {
+    if (this.timerMode === 'none') return this.getClockState();
     if (this.awaitingStoppageApproval) return this.getClockState();
 
     if (!this.inStoppage && this._atRegulation()) {
@@ -282,14 +424,19 @@ class MatchEngine extends EventEmitter {
 
   setTimerMode(mode) {
       this.awaitingStoppageApproval = false;
-    const nextMode = mode === 'countdown' ? 'countdown' : 'stopwatch';
+    const nextMode = ['countdown', 'none'].includes(mode) ? mode : 'stopwatch';
     if (nextMode !== this.timerMode) {
+      const previousMode = this.timerMode;
       this.timerMode = nextMode;
+      this.clockRunning = false;
       this.inStoppage = false;
+      this.stoppageTimeMinutes = 0;
       this.stoppageElapsedSeconds = 0;
-      this.elapsedSeconds = this.hasConfiguredStartSeconds
-        ? this.startSeconds
-        : (nextMode === 'countdown' ? this.regulationSeconds : 0);
+      if (nextMode !== 'none') {
+        this.elapsedSeconds = previousMode === 'none'
+          ? (this.hasConfiguredStartSeconds ? this.startSeconds : (nextMode === 'countdown' ? this.regulationSeconds : 0))
+          : this.elapsedSeconds;
+      }
       this.config.set('match.timerMode', nextMode); // operator-initiated change → persisted
       this.events.recordEvent('TIMER_MODE_CHANGED', { mode: nextMode });
     }
@@ -328,6 +475,115 @@ class MatchEngine extends EventEmitter {
     this.config.set('match.periodLabel', period);
     this.events.recordEvent('PERIOD_CHANGED', { period });
     this.emit('clockChanged', this.getClockState());
+  }
+
+  getSetState() {
+    return {
+      bestOfSets: this.bestOfSets,
+      completedSets: this.completedSets.map(set => ({ ...set })),
+      homeSets: this.homeSetsWon,
+      awaySets: this.awaySetsWon
+    };
+  }
+
+  setBestOfSets(count) {
+    const parsed = Number(count);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 9) {
+      throw new Error('Best-of sets must be a whole number from 1 to 9.');
+    }
+    this.bestOfSets = parsed;
+    this.config.set('match.bestOfSets', parsed);
+    this.emit('setsChanged', this.getSetState());
+    return this.getSetState();
+  }
+
+  completeSet(winner) {
+    if (winner !== 'home' && winner !== 'away') {
+      throw new Error('Set winner must be home or away.');
+    }
+    if (this.completedSets.length >= this.bestOfSets) {
+      throw new Error('All configured sets have already been completed.');
+    }
+    const team = this.score[winner];
+    const completed = {
+      number: this.completedSets.length + 1,
+      winner,
+      team: team.name,
+      points: { home: this.score.home.score, away: this.score.away.score },
+      timestamp: Date.now()
+    };
+    this.completedSets.push(completed);
+    this._adjustSetTally(winner, 1);
+    this.config.set('match.completedSets', this.completedSets);
+    this.events.recordEvent('SET_COMPLETED', {
+      set: completed.number,
+      winner,
+      team: team.name,
+      points: completed.points
+    });
+    this.score.resetScore();
+    this.emit('setsChanged', this.getSetState());
+    return this.getSetState();
+  }
+
+  removeCompletedSet(setNumber) {
+    const parsed = Number(setNumber);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > this.completedSets.length) {
+      throw new Error('Set number must match a completed set.');
+    }
+    const [removed] = this.completedSets.splice(parsed - 1, 1);
+    this._adjustSetTally(removed.winner, -1);
+    this.completedSets.forEach((set, index) => {
+      set.number = index + 1;
+    });
+    this.config.set('match.completedSets', this.completedSets);
+    this.events.recordEvent('SET_REMOVED', {
+      set: removed.number,
+      winner: removed.winner,
+      team: removed.team,
+      points: removed.points
+    });
+    this.emit('setsChanged', this.getSetState());
+    return this.getSetState();
+  }
+
+  resetSets() {
+    this.completedSets = [];
+    this.homeSetsWon = 0;
+    this.awaySetsWon = 0;
+    this.config.set('match.completedSets', this.completedSets);
+    this.config.set('match.homeSetsWon', this.homeSetsWon);
+    this.config.set('match.awaySetsWon', this.awaySetsWon);
+    this.events.recordEvent('SETS_RESET');
+    this.emit('setsChanged', this.getSetState());
+    return this.getSetState();
+  }
+
+  adjustSetTally(team, amount) {
+    if (!['home', 'away'].includes(team) || ![-1, 1].includes(Number(amount))) {
+      throw new Error('Set tally adjustment must be +1 or -1 for home or away.');
+    }
+    this._adjustSetTally(team, Number(amount));
+    this.events.recordEvent('SET_TALLY_ADJUSTED', {
+      team,
+      amount: Number(amount),
+      total: team === 'home' ? this.homeSetsWon : this.awaySetsWon
+    });
+    this.emit('setsChanged', this.getSetState());
+    return this.getSetState();
+  }
+
+  _adjustSetTally(team, amount) {
+    const property = team === 'home' ? 'homeSetsWon' : 'awaySetsWon';
+    this[property] = Math.max(0, this[property] + amount);
+    this.config.set(`match.${property}`, this[property]);
+  }
+
+  resetScoreAndSets() {
+    const score = this.score.resetScore();
+    this.resetSets();
+    this.events.recordEvent('MATCH_SCORE_AND_SETS_RESET');
+    return { score, sets: this.getSetState() };
   }
 
   setMatchState(newState) {
@@ -369,13 +625,17 @@ class MatchEngine extends EventEmitter {
   }
 
   getFullState() {
+    const clock = this.getClockState();
     return {
       matchState: this.state,
       tempState: this.tempState,
       isSequenceRunning: this.isSequenceRunning,
       activeSequenceName: this.activeSequenceName,
-      clock: this.getClockState(),
-      score: this.score.getScore()
+      clock,
+      offense: clock.offense,
+      offenseTimer: clock.offenseTimer,
+      score: this.score.getScore(),
+      sets: this.getSetState()
     };
   }
 

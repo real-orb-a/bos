@@ -32,6 +32,10 @@ body {
   transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0s;
 }
 
+.score-bug.offense-active {
+  height: 68px;
+}
+
 .score-bug.faded-out {
   opacity: 0;
   transform: translateY(-8px);
@@ -127,6 +131,50 @@ body {
   color: rgba(255, 255, 255, 0.6);
   letter-spacing: 1px;
   margin-top: 1px;
+}
+
+.sets-display {
+  display: none;
+  font-size: 8px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.8px;
+  margin-top: 2px;
+}
+
+.score-bug.volleyball-mode .clock-display,
+.score-bug.volleyball-mode .period-display {
+  display: none;
+}
+
+.score-bug.volleyball-mode .sets-display {
+  display: block;
+  color: #38bdf8;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  margin-top: 0;
+}
+
+.offense-display {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #fbbf24;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  line-height: 1;
+  margin-top: 3px;
+}
+
+.offense-display strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.offense-display.hidden {
+  display: none;
 }
 
 /* Additional-time overlay: shown below the clock once the set time is reached */

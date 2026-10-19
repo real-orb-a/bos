@@ -2,7 +2,7 @@
 
 This document describes the behavior implemented in this repository. It is intended to be a practical guide to the runtime architecture, operator workflows, configuration, OBS setup, and current limitations. The source code is authoritative if behavior changes.
 
-BOS is an Electron control application for OBS Studio. It manages the match clock and score, triggers Source Record replay-buffer saves, sends graphics to OBS Browser Sources, and coordinates goal transitions. It does not capture, edit, or play replay video itself.
+BOS is an Electron control application for OBS Studio. It manages the match clock and score, can trigger Source Record replay-buffer saves, sends graphics to OBS Browser Sources, and coordinates a cancelable goal sequence. Goal sequences do not switch scenes automatically. BOS does not capture, edit, or play replay video itself.
 
 ## 1. Runtime Overview
 
@@ -107,8 +107,10 @@ Score and team updates are persisted by `ScoreManager`. Match period labels, exp
 | `goalWorkflow.showGoalAnimation`, `goalWorkflow.goalAnimationDuration` | Goal graphic visibility and duration. |
 | `goalWorkflow.captureReplayOnGoal` | Whether a goal invokes replay capture. |
 | `goalWorkflow.replaySourceId` | Blank captures every enabled camera in sequence; an ID captures only that source. |
-| `goalWorkflow.celebrationDurationSeconds` | Hold before the REPLAY scene transition. |
-| `match.timerMode` | `stopwatch` or `countdown`. |
+| `goalWorkflow.celebrationDurationSeconds` | Goal celebration hold before the sequence waits for the operator. |
+| `match.timerMode` | `stopwatch`, `countdown`, or `none` for no-time matches. |
+| `match.offenseTimerSeconds`, `match.offenseSeconds` | Basketball offense-timer duration and current time in seconds; defaults to 24 seconds and is shown in the basketball controls and header. |
+| `match.bestOfSets`, `match.completedSets` | Volleyball total sets and persisted manual set-winner results, including each set's points. |
 | `match.regulationMinutes` | Main clock regulation/set duration in minutes. |
 | `match.startSeconds` | Optional configured start/reset time in seconds, set from the `MM:SS` control. |
 | `match.periodLabel` | Free-text period label, for example `Q1` or `First Half`. |
@@ -131,7 +133,7 @@ The renderer can call only methods exposed by `contextBridge` in `electron/prelo
 | `events` | Read, record, and clear the event log. |
 | `replay` | Read capture status, trigger one source, or trigger all enabled sources. `air()` is a placeholder. |
 | `graphics` | Show/hide lower thirds and top messages, manage presets/queue, trigger goal/transition graphics, control scorebug visibility. |
-| `workflow` | Trigger a goal, continue from replay to LIVE, abort, and inspect workflow state. |
+| `workflow` | Trigger a goal, end the sequence, cancel it, and inspect workflow state. |
 | `system` | Emergency return to LIVE. |
 | `config` | Read/write configuration. |
 
@@ -184,14 +186,12 @@ Team colors drive the operator goal buttons, team labels, goal animation, transi
 2. Set temporary match state to `GOAL` and record a `GOAL` event with the clock, team, player, and points.
 3. Increment the selected team’s score and request a score flip animation.
 4. Optionally show the goal animation and wait `goalAnimationDuration`.
-5. If enabled, trigger Source Record capture. With no `goalWorkflow.replaySourceId`, all enabled camera sources are triggered sequentially; with an ID, only that source is triggered.
-6. Wait the configured celebration duration.
-7. Trigger the custom REPLAY wipe, switch to the configured REPLAY scene when covered, and wait until the operator presses **GO AHEAD → LIVE**.
-8. Trigger the LIVE wipe, switch to the configured LIVE scene, clear temporary state, and complete the workflow.
+5. If enabled, trigger Source Record capture. With no `goalWorkflow.replaySourceId`, all enabled camera sources are triggered sequentially; with an ID, only that source is triggered. This saves footage but does not switch scenes.
+6. Keep LIVE on air after the goal. The operator may choose **GO TO REPLAY** to switch to the configured REPLAY scene. **CANCEL SEQUENCE** remains available throughout and returns to LIVE; after opting into replay, **GO AHEAD → LIVE** returns to LIVE.
 
-The workflow does not load or play the saved camera files. The REPLAY scene must already be composed in OBS as desired. The GO AHEAD control is required after entering REPLAY. The RETURN TO LIVE/emergency abort bypasses the approval wait and switches to LIVE directly.
+The workflow does not load or play saved camera files; it relies on the configured OBS REPLAY scene to present replay footage. Replay capture and switching to the replay scene are separate: capture follows its goal setting, while going to REPLAY always requires an operator action.
 
-The custom transition Browser Source sends `TRANSITION_COVERED` at about 500 ms and `TRANSITION_FINISHED` at about 1100 ms. The workflow matches those events by transition ID and also uses timeouts so it does not wait forever if the Browser Source is disconnected. The transition source must be active in both LIVE and REPLAY (or be in a shared scene) to receive the trigger across scene changes.
+The custom transition Browser Source remains available for manually selected scene transitions.
 
 ## 10. Replay Capture: Source Record
 
@@ -204,13 +204,18 @@ Each `replay.captureSources` row has an ID, display name, enabled flag, and opti
 - Goal capture follows the same all-enabled behavior unless `goalWorkflow.replaySourceId` selects one camera.
 - If there are no enabled source rows, SAVE ALL falls back to the shared default hotkey.
 
+Completed volleyball sets can be removed individually from the set-results list. Removing a result renumbers later sets and updates the series count; it does not restore the score from the removed set.
+The live home/away sets-won tallies have separate +/− controls. Manual tally adjustments do not edit completed-set history, and counts cannot go below zero.
+The best-of count can be changed at any time, including below the number of already completed sets. The main score reset also clears all completed set results. Awarding a set displays a “SET WON BY” lower third.
+Home and away goal-button action labels are independently configurable (for example, “GOAL” or “POINT”). The goal graphic animation is silent.
+
 Replay request state is `IDLE`, `TRIGGERING`, `TRIGGERED`, or `ERROR`. The UI briefly shows the result, returns to READY, and keeps the last-triggered timestamp. Capture status reflects request acceptance, not confirmed media-file creation.
 
 `airReplay()` currently returns a not-implemented result. BOS does not locate, adopt, trim, or play the files saved by Source Record. `scenes.replayMediaSource` and the OBS media helpers are prepared for future airing integration but are not connected to this capture path.
 
 ## 11. Graphics Server and Browser Sources
 
-`GraphicsEngine` starts an HTTP static server and WebSocket server on `graphics.httpPort` (default `8088`). Directory URLs resolve to `index.html`. Browser Sources connect to `ws://<host>:8088/ws`, receive `INITIAL_SYNC`, and reconnect after a dropped socket. The initial snapshot includes score/clock, lower-third state, top-message state, replay-overlay state, and scorebug visibility.
+`GraphicsEngine` starts an HTTP static server and WebSocket server on `graphics.httpPort` (default `8088`). Directory URLs resolve to `index.html`. Browser Sources connect to `ws://<host>:8088/ws`, receive `INITIAL_SYNC`, and reconnect after a dropped socket. The initial snapshot includes score/clock, set tally, offense timer, lower-third state, top-message state, replay-overlay state, and scorebug visibility.
 
 ### Browser Source URLs
 
@@ -223,29 +228,39 @@ Replay request state is `IDLE`, `TRIGGERING`, `TRIGGERED`, or `ERROR`. The UI br
 | Replay overlay | `/graphics/replay/` | Replay title/speed/progress display when replay overlay messages are sent. |
 | Transition | `/graphics/transitions/` | Custom sliding wipe with title and optional team colors. |
 
+The match operator panel exposes a link to `/remote/` using the machine's local network address and a persisted password (`graphics.remoteControlKey`), generated on first run and stored in `config/bos.json`. Change the password in the BOS panel; it must be at least 8 characters and is applied only when SAVE PASSWORD is clicked. Show/hide controls are available for the password in both BOS and the remote login. Browser remotes must authenticate against the current stored password, and changing it revokes existing remote sessions. The BOS panel owns the persisted immediate-score toggle (`graphics.remoteImmediateScore`), which defaults to off and syncs to connected remotes. With it off, remote score taps are submitted as requests and must be approved or rejected in the BOS operator panel; approval never happens on the browser remote. With it on, remote score changes apply immediately. The authenticated remote can also seek the current match clock, set the clock's configured start time, and change the period label. Match and offense timer controls always take effect immediately. The offense timer is included in the scorebug/browser remote during countdown (basketball) mode. In no-time mode, the scorebug and remote show the volleyball set tally instead of a `NO TIME` clock.
+
+The lower-third quick messages include one TIMEOUT CALLED action per configured team. Each button identifies its team, while the on-air title remains `TIMEOUT CALLED` and the subtitle reads `TIMEOUT CALLED BY [team]`; the buttons refresh when team names change. Queue updates are sent to the dashboard immediately, and queued messages begin automatically when the lower third is idle or after the current message is dismissed.
+
 ### WebSocket messages
 
 | Message | Direction | Purpose |
 | :--- | :--- | :--- |
-| `INITIAL_SYNC` | BOS → graphic | Initial score/clock and persistent graphic state. |
+| `INITIAL_SYNC` | BOS → graphic | Initial score/clock/set tally and persistent graphic state. |
 | `SCORE_UPDATE` | BOS → scorebug | Team scores/branding and animation type. |
 | `CLOCK_UPDATE` | BOS → scorebug | Current clock/period/additional-time state. |
+| `SETS_UPDATE` | BOS → scorebug | Updated volleyball set tally. |
+| `OFFENSE_UPDATE` | BOS → scorebug/browser remote | Offense timer time and running state. |
+| `REMOTE_AUTH` / `REMOTE_AUTH_RESULT` | browser remote ↔ BOS | Authenticate browser control access with the current persisted password. |
+| `REMOTE_AUTH_REQUIRED` | BOS → authenticated browser remote | Password changed; re-authentication is required before further control. |
+| `REMOTE_COMMAND` / `REMOTE_COMMAND_RESULT` | browser remote ↔ BOS | Authenticated score requests or immediate score changes and immediate timer actions and their result. |
+| `REMOTE_SCORE_PROPOSALS` | BOS → browser remote / BOS renderer | Pending remote score requests for the BOS operator to approve or reject. |
 | `SCOREBUG_VISIBILITY` | BOS → scorebug | Fade the scorebug in/out. Visibility resets to visible on BOS restart. |
 | `GOAL_ANIMATION` | BOS → goal | Team, score, player/assist, animation duration. |
 | `LOWER_THIRD_SHOW` / `LOWER_THIRD_HIDE` | BOS → lower third | Show/dismiss current lower third. |
 | `TOP_MESSAGE_SHOW` / `TOP_MESSAGE_HIDE` | BOS → top message | Show/dismiss top-message banner through API. |
 | `REPLAY_OVERLAY_SHOW` / `REPLAY_OVERLAY_HIDE` | BOS → replay | Replay overlay state. Replay capture itself does not currently play/emit a clip overlay. |
 | `TRIGGER_TRANSITION` | BOS → transition | Start a custom wipe with ID/title/colors. |
-| `TRANSITION_COVERED` / `TRANSITION_FINISHED` | transition → BOS | Report coverage and completion points to the goal workflow. |
+| `TRANSITION_COVERED` / `TRANSITION_FINISHED` | transition → BOS | Report coverage and completion for transition graphics. |
 
-Scorebug visibility is currently in-memory only and returns to visible at startup. It can be toggled from Match Controls. The standard broadcast message form always shows a lower third; its position selector chooses left, center, or right. The separate top-message API and Browser Source remain available.
+Scorebug visibility is currently in-memory only and returns to visible at startup. Volleyball set winners are selected manually; awarding a set records the winner and point score, resets points for the next set, and updates the set tally. On-screen messages use duration `0` to remain until hidden; the lower-third and top-message sources omit the default broadcast badge.
 
 ## 12. Renderer Controls and Keyboard Shortcuts
 
 The dashboard has three main work areas:
 
-- **Match Controls:** official match state, custom period label, regulation duration, starting clock, timer mode, added-time mode/minutes, scoring value, team goal buttons, +/- controls, scorebug visibility, event log.
-- **Broadcast Message:** standard-style lower-third title/subtitle/highlight, duration, position, accent color, presets, active graphic status, and a queue.
+- **Match Controls:** match state, custom period label, regulation duration, starting clock, stopwatch/countdown/no-time modes, manual volleyball set winners and total sets, scoring value, team goal buttons, +/- controls, scorebug visibility, and event log.
+- **On-Screen Message:** title/subtitle/highlight, finite or until-hidden duration, position, accent color, presets, active graphic status, and a queue.
 - **Replay Capture:** shared SAVE ALL action, per-enabled-camera buttons, request state, and last-triggered time.
 
 Settings tabs include OBS/scenes/Source Record camera trigger list, Teams & Branding, Goal Automation, and the hotkey reference. Team palette buttons apply colors/names and their standard G/E/T bind. Any team goal key can be edited in Teams & Branding.
@@ -290,14 +305,14 @@ The smoke test starts the GraphicsEngine on port `8088`. If another BOS instance
 
 ## 16. Current Limitations
 
-- Replay capture sends hotkey requests only. BOS does not verify Source Record completed a file write, nor does it provide replay clip playback or file management.
+- Replay capture sends hotkey requests only. BOS does not verify Source Record completed a file write, nor does it provide replay clip playback or file management. Goal-triggered capture is off by default.
 - `ReplayEngine.airReplay()` is a placeholder.
-- The goal workflow switches to the configured REPLAY scene and waits for GO AHEAD; the operator/OBS scene must provide the intended replay picture.
+- Goal sequences remain on the current scene and can be cancelled; scene changes and replay airing are operator-controlled.
 - OBS has no simulated fallback. Scene changes, transitions, and replay hotkey requests require an active OBS WebSocket connection.
 - Custom transition coordination relies on the transition Browser Source being connected; timeout fallbacks permit progress but cannot guarantee that a wipe was visible.
-- The `autoReturnLive` goal config field is retained but the current workflow uses explicit operator GO AHEAD after REPLAY.
+- The `autoReturnLive` goal config field is retained for compatibility but does not trigger automatic scene changes.
 - Team goal binds are configurable per team. R/L/U/H/Space are currently fixed in the renderer rather than dynamically loaded from the legacy `hotkeys` block.
-- The top-message graphic/API remains available, but the standard broadcast-message form now controls lower thirds only.
+- The top-message graphic/API remains available, but the standard message form controls lower thirds only.
 - Broadcast package path resolution exists but the HTTP server has not been wired to serve an active package.
 
 ---

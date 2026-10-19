@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const currentSceneName = document.getElementById('current-scene-name');
   const currentTransitionInfo = document.getElementById('current-transition-info');
   const programStatusBadge = document.getElementById('program-status-badge');
-  const programDot = document.getElementById('program-dot');
   const programText = document.getElementById('program-text');
 
   const activeSequenceBar = document.getElementById('active-sequence-bar');
@@ -16,8 +15,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const seqStepPill = document.getElementById('seq-step-pill');
   const btnAbortSequence = document.getElementById('btn-abort-sequence');
   const btnContinueSequence = document.getElementById('btn-continue-sequence');
+  let sequenceStep = null;
 
   const btnEmergencyAbort = document.getElementById('btn-emergency-abort');
+  let liveSceneName = 'LIVE';
+  let replaySceneName = 'REPLAY';
 
   // Preview Drawer
   const previewDrawerToggle = document.getElementById('preview-drawer-toggle');
@@ -29,110 +31,67 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.GraphicsModule.init();
   window.ReplayModule.init();
   window.SettingsModule.init();
-  window.BasketballModule.init();
-  window.VolleyballModule.init();
 
   // Bind OBS controls
   btnObsReconnect.addEventListener('click', async () => {
-    obsStatusIndicator.className = 'obs-status-indicator connecting';
-    obsLabel.textContent = 'OBS CONNECTING…';
+    obsLabel.textContent = 'CONNECTING...';
     try {
-      updateObsStatusUI(await window.bosAPI.obs.connect());
+      await window.bosAPI.obs.connect();
     } catch (e) {
       console.warn('Reconnect error:', e);
-      window.BOSUI.toast('Could not start the OBS connection attempt.', { type: 'error' });
     }
   });
 
   // Emergency Return to Live (Section 27)
-  btnEmergencyAbort.addEventListener('click', returnToLive);
-
-  // The backend always reports success; check the real OBS state before saying we are live.
-  async function returnToLive() {
-    try {
-      await window.bosAPI.system.emergencyAbort();
-      const status = await window.bosAPI.obs.getStatus();
-      if (status && status.connected) {
-        updateProgramStatus('LIVE');
-      } else {
-        window.BOSUI.toast('OBS is not connected, so the scene could not be switched. Graphics and the goal sequence were cleared.', { type: 'error' });
-      }
-    } catch (e) {
-      console.error('Return to live failed:', e);
-      window.BOSUI.toast('Return to live failed. Switch scenes in OBS directly.', { type: 'error' });
-    }
-  }
+  btnEmergencyAbort.addEventListener('click', async () => {
+    await window.bosAPI.system.emergencyAbort();
+    updateProgramStatus('LIVE');
+  });
 
   // Sequence Abort
   btnAbortSequence.addEventListener('click', async () => {
-    await window.bosAPI.workflow.abort();
-    activeSequenceBar.classList.add('hidden');
-    updateProgramStatus('LIVE');
+    btnAbortSequence.disabled = true;
+    try {
+      await window.bosAPI.workflow.abort();
+    } catch (error) {
+      window.alert(error.message);
+    } finally {
+      btnAbortSequence.disabled = false;
+    }
   });
 
   btnContinueSequence.addEventListener('click', async () => {
     btnContinueSequence.disabled = true;
     try {
-      await window.bosAPI.workflow.continueToLive();
+      if (sequenceStep === 'WAITING_FOR_REPLAY_OPT_IN') {
+        await window.bosAPI.workflow.goToReplay();
+      } else if (sequenceStep === 'WAITING_FOR_GO_AHEAD') {
+        await window.bosAPI.workflow.continueToLive();
+      }
+    } catch (error) {
+      window.alert(error.message);
     } finally {
       btnContinueSequence.disabled = false;
     }
   });
 
   // Preview Drawer Toggle
-  // The four preview iframes each open a WebSocket and render a page, so they are only
-  // loaded while the drawer is open, and use the configured graphics port.
-  const previewFrames = Array.from(document.querySelectorAll('.preview-iframe'));
-  let graphicsOrigin = 'http://localhost:8088';
-  const browserSourcesUrl = document.getElementById('browser-sources-url');
-
-  async function loadGraphicsOrigin() {
-    try {
-      const port = await window.bosAPI.config.get('graphics.httpPort');
-      graphicsOrigin = `http://localhost:${Number(port) || 8088}`;
-    } catch (e) {
-      console.warn('Could not read graphics port, using 8088:', e);
-    }
-    browserSourcesUrl.textContent = `${graphicsOrigin}/graphics/...`;
-  }
-
-  function setPreviewsActive(active) {
-    previewFrames.forEach((frame) => {
-      if (active) {
-        const wanted = graphicsOrigin + frame.dataset.srcPath;
-        if (frame.getAttribute('src') !== wanted) frame.setAttribute('src', wanted);
-      } else {
-        frame.removeAttribute('src');
-      }
-    });
-  }
-
   previewDrawerToggle.addEventListener('click', () => {
-    const open = previewDrawerBody.classList.contains('hidden');
-    previewDrawerBody.classList.toggle('hidden', !open);
-    btnToggleDrawer.textContent = open ? '▼ HIDE PREVIEWS' : '▲ SHOW PREVIEWS';
-    btnToggleDrawer.setAttribute('aria-expanded', String(open));
-    setPreviewsActive(open);
-  });
-  await loadGraphicsOrigin();
-
-  // Scene names are configurable; compare against the configured names, not literals.
-  let liveSceneName = 'LIVE';
-  let replaySceneName = 'REPLAY';
-  async function loadSceneNames() {
-    try {
-      const scenes = await window.bosAPI.config.get('scenes');
-      if (scenes && scenes.liveScene) liveSceneName = scenes.liveScene;
-      if (scenes && scenes.replayScene) replaySceneName = scenes.replayScene;
-    } catch (e) {
-      console.warn('Could not read scene names, using defaults:', e);
+    const isHidden = previewDrawerBody.classList.contains('hidden');
+    if (isHidden) {
+      previewDrawerBody.classList.remove('hidden');
+      btnToggleDrawer.textContent = '▼ HIDE PREVIEWS';
+    } else {
+      previewDrawerBody.classList.add('hidden');
+      btnToggleDrawer.textContent = '▲ SHOW PREVIEWS';
     }
-  }
-  await loadSceneNames();
-  window.addEventListener('bos:settings-saved', loadSceneNames);
+  });
 
   // Initial OBS status
   try {
+    const sceneConfig = await window.bosAPI.config.get('scenes');
+    liveSceneName = sceneConfig.liveScene || liveSceneName;
+    replaySceneName = sceneConfig.replayScene || replaySceneName;
     const status = await window.bosAPI.obs.getStatus();
     updateObsStatusUI(status);
 
@@ -164,6 +123,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Workflow Events
   window.bosAPI.workflow.onStarted((wf) => {
+    sequenceStep = null;
     activeSequenceBar.classList.remove('hidden');
     btnContinueSequence.classList.add('hidden');
     seqTitle.textContent = `AUTOMATED GOAL SEQUENCE: ${wf.team.toUpperCase()} GOAL`;
@@ -172,17 +132,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   window.bosAPI.workflow.onStep((data) => {
+    sequenceStep = data.step;
     seqStepPill.textContent = data.step.replace(/_/g, ' ');
-    btnContinueSequence.classList.toggle('hidden', data.step !== 'WAITING_FOR_GO_AHEAD');
+    const waitingForReplayChoice = data.step === 'WAITING_FOR_REPLAY_OPT_IN';
+    const waitingToReturnLive = data.step === 'WAITING_FOR_GO_AHEAD';
+    btnContinueSequence.textContent = waitingForReplayChoice ? 'GO TO REPLAY' : 'GO AHEAD → LIVE';
+    btnContinueSequence.classList.toggle('hidden', !waitingForReplayChoice && !waitingToReturnLive);
   });
 
   window.bosAPI.workflow.onCompleted(() => {
+    sequenceStep = null;
     activeSequenceBar.classList.add('hidden');
     btnContinueSequence.classList.add('hidden');
     updateProgramStatus('LIVE');
   });
 
   window.bosAPI.workflow.onAborted(() => {
+    sequenceStep = null;
     activeSequenceBar.classList.add('hidden');
     btnContinueSequence.classList.add('hidden');
     updateProgramStatus('LIVE');
@@ -209,30 +175,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentSceneName.textContent = status.currentScene;
       }
     } else if (status.connecting) {
-      obsStatusIndicator.className = 'obs-status-indicator connecting';
-      obsLabel.textContent = 'OBS CONNECTING…';
+      obsStatusIndicator.className = 'obs-status-indicator';
+      obsLabel.textContent = 'OBS CONNECTING...';
     } else {
       obsStatusIndicator.className = 'obs-status-indicator disconnected';
       obsLabel.textContent = 'OBS DISCONNECTED';
       obsPing.textContent = '-- ms';
-      // Say why, when OBS told us (full explanation in the tooltip).
-      const reason = status.lastError;
-      if (reason) {
-        const shortReasons = {
-          AUTH_FAILED: 'WRONG PASSWORD',
-          UNREACHABLE: 'NOT REACHABLE',
-          HOST_NOT_FOUND: 'HOST NOT FOUND',
-          TIMEOUT: 'NO RESPONSE',
-          VERSION_MISMATCH: 'BAD VERSION',
-          CONNECTION_LOST: 'CONNECTION LOST'
-        };
-        const shortText = shortReasons[reason.category];
-        if (shortText) obsLabel.textContent = `OBS DISCONNECTED — ${shortText}`;
-        obsStatusIndicator.title = reason.message;
-      }
-    }
-    if (status.connected || status.connecting) {
-      obsStatusIndicator.title = '';
     }
   }
 
@@ -251,43 +199,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- Keyboard Shortcuts (Section 28) ---
   const keyboardShortcutsReadyAt = Date.now() + 1500;
-  // Codes we acted on at keydown; their keyup is cancelled so a focused button or
-  // <summary> does not ALSO activate (e.g. Space toggling the clock and re-clicking a button).
-  const handledCodes = new Set();
-
   window.addEventListener('keydown', (e) => {
     if (e.repeat || Date.now() < keyboardShortcutsReadyAt) return;
 
-    // Leave browser/OS shortcuts alone (Ctrl+R must not save a replay).
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-    // No live shortcuts while a dialog is open (typing in Settings must never fire a goal).
-    if (window.BOSUI.isModalOpen()) return;
-    if (document.body.dataset.view !== 'control-room') return;
-
     // Avoid triggering when user is typing in an input
     const tag = e.target.tagName.toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) {
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
       return;
     }
 
     const code = e.code;
-    let handled = true;
 
     // Team-specific score keys (configured in Teams & Branding).
     if (window.MatchModule.handleGoalHotkey(code)) {
-      // handled by MatchModule
+      e.preventDefault();
     }
     // R: Save Replay (trigger Source Record hotkey)
-    else if (code === 'KeyR') {
+    else if (code === 'KeyR' && !e.defaultPrevented) {
+      e.preventDefault();
       window.ReplayModule.doCapture({});
     }
     // L: Emergency Return to Live
-    else if (code === 'KeyL') {
-      returnToLive();
+    else if (code === 'KeyL' && !e.defaultPrevented) {
+      e.preventDefault();
+      window.bosAPI.system.emergencyAbort();
+      updateProgramStatus('LIVE');
     }
     // U: Under Review (Quick)
-    else if (code === 'KeyU') {
+    else if (code === 'KeyU' && !e.defaultPrevented) {
+      e.preventDefault();
       window.bosAPI.graphics.showLowerThird({
         title: 'UNDER REVIEW',
         subtitle: 'DECISION PENDING',
@@ -297,24 +237,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
     }
     // H: Hide Lower Third
-    else if (code === 'KeyH') {
+    else if (code === 'KeyH' && !e.defaultPrevented) {
+      e.preventDefault();
       window.bosAPI.graphics.hideLowerThird();
     }
     // Space: Start/Pause Match Clock
-    else if (code === 'Space') {
-      window.bosAPI.match.clockToggle();
-    } else {
-      handled = false;
-    }
-
-    if (handled) {
+    else if (code === 'Space' && !e.defaultPrevented) {
       e.preventDefault();
-      handledCodes.add(code);
+      window.bosAPI.match.clockToggle();
     }
-  });
-
-  window.addEventListener('keyup', (e) => {
-    if (handledCodes.delete(e.code)) e.preventDefault();
   });
 
   console.log('[BOS] App initialized and hotkeys registered.');

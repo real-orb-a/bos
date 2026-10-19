@@ -13,6 +13,7 @@ class ScoreGraphicsController {
       home: scoreState.home,
       away: scoreState.away,
       clock: clockState,
+      sets: this.match.getSetState(),
       animation: animationType, // 'flip', 'pop', 'flash', 'update'
       changedTeam,
       timestamp: Date.now()

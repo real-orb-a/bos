@@ -29,6 +29,8 @@ window.SettingsModule = (function() {
   const cfgTeamAwayShort = document.getElementById('cfg-team-away-short');
   const cfgTeamAwayColor = document.getElementById('cfg-team-away-color');
   const cfgTeamAwayHotkey = document.getElementById('cfg-team-away-hotkey');
+  const cfgHomeGoalAction = document.getElementById('cfg-home-goal-action');
+  const cfgAwayGoalAction = document.getElementById('cfg-away-goal-action');
 
   // Goal workflow
   const cfgGoalAnim = document.getElementById('cfg-goal-anim');
@@ -36,56 +38,30 @@ window.SettingsModule = (function() {
   const cfgCaptureReplay = document.getElementById('cfg-capture-replay');
   const cfgReplaySourceId = document.getElementById('cfg-replay-source-id');
 
-  let openerElement = null;
-
-  function openModal() {
-    openerElement = document.activeElement;
-    loadFormData();
-    modal.classList.remove('hidden');
-    cfgObsHost.focus();
-  }
-
-  function closeModal() {
-    modal.classList.add('hidden');
-    if (openerElement && typeof openerElement.focus === 'function') openerElement.focus();
-    openerElement = null;
-  }
-
   function init() {
     bindEvents();
   }
 
   function bindEvents() {
-    btnOpen.addEventListener('click', openModal);
-    btnClose.addEventListener('click', closeModal);
-    btnCancel.addEventListener('click', closeModal);
+    btnOpen.addEventListener('click', () => {
+      loadFormData();
+      modal.classList.remove('hidden');
+    });
 
-    // Escape closes; Tab stays inside the dialog.
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeModal();
-      } else if (e.key === 'Tab') {
-        const focusable = Array.from(modal.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])'))
-          .filter(el => !el.disabled && el.offsetParent !== null);
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
+    btnClose.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+
+    btnCancel.addEventListener('click', () => {
+      modal.classList.add('hidden');
     });
 
     tabButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        tabButtons.forEach(b => {
-          b.classList.remove('active');
-          b.setAttribute('aria-selected', 'false');
-        });
+        tabButtons.forEach(b => b.classList.remove('active'));
         tabPanes.forEach(p => p.classList.remove('active'));
 
         btn.classList.add('active');
-        btn.setAttribute('aria-selected', 'true');
         const targetPane = document.getElementById(btn.dataset.tab);
         if (targetPane) targetPane.classList.add('active');
       });
@@ -141,22 +117,7 @@ window.SettingsModule = (function() {
     });
   }
 
-  async function refreshHotkeyTable() {
-    try {
-      const scores = await window.bosAPI.score.get();
-      if (!scores) return;
-      [['home', scores.home], ['away', scores.away]].forEach(([side, team]) => {
-        if (!team) return;
-        document.getElementById(`hk-${side}-name`).textContent = `${team.name} goal`;
-        document.getElementById(`hk-${side}-key`).textContent = formatHotkey(team.hotkey || (side === 'home' ? 'KeyG' : 'KeyT'));
-      });
-    } catch (e) {
-      console.warn('Could not refresh hotkey table:', e);
-    }
-  }
-
   async function loadFormData() {
-    refreshHotkeyTable();
     try {
       const config = await window.bosAPI.config.get();
       if (!config) return;
@@ -164,11 +125,7 @@ window.SettingsModule = (function() {
       if (config.obs) {
         cfgObsHost.value = config.obs.host || 'localhost';
         cfgObsPort.value = config.obs.port || 4455;
-        // The stored password is never sent to the renderer; blank keeps the saved one.
-        cfgObsPassword.value = '';
-        cfgObsPassword.placeholder = config.obs.passwordSet
-          ? 'Saved — leave blank to keep it'
-          : 'Leave blank if OBS has no password';
+        cfgObsPassword.value = config.obs.password || '';
       }
 
       if (config.scenes) {
@@ -197,8 +154,10 @@ window.SettingsModule = (function() {
       if (config.goalWorkflow) {
         cfgGoalAnim.checked = !!config.goalWorkflow.showGoalAnimation;
         cfgCelebrationDur.value = config.goalWorkflow.celebrationDurationSeconds || 3.0;
-        cfgCaptureReplay.checked = config.goalWorkflow.captureReplayOnGoal !== false;
+        cfgCaptureReplay.checked = !!config.goalWorkflow.captureReplayOnGoal;
         cfgReplaySourceId.value = config.goalWorkflow.replaySourceId || '';
+        cfgHomeGoalAction.value = config.goalWorkflow.homeGoalActionLabel || 'GOAL';
+        cfgAwayGoalAction.value = config.goalWorkflow.awayGoalActionLabel || 'GOAL';
       }
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -245,28 +204,31 @@ window.SettingsModule = (function() {
         }
       },
       goalWorkflow: {
+        ...(currentConfig.goalWorkflow || {}),
         showGoalAnimation: cfgGoalAnim.checked,
         goalAnimationDuration: 3.0,
         celebrationDurationSeconds: parseFloat(cfgCelebrationDur.value) || 3.0,
         captureReplayOnGoal: cfgCaptureReplay.checked,
         replaySourceId: cfgReplaySourceId.value.trim(),
+        homeGoalActionLabel: cfgHomeGoalAction.value.trim().toUpperCase() || 'GOAL',
+        awayGoalActionLabel: cfgAwayGoalAction.value.trim().toUpperCase() || 'GOAL',
         autoReturnLive: true
       }
     };
 
     try {
-      const saved = await window.bosAPI.config.updateAll(newConfig);
+      await window.bosAPI.config.updateAll(newConfig);
       await window.bosAPI.score.updateTeams(newConfig.teams);
-      if (saved === false) {
-        window.BOSUI.toast('Settings could not be written to disk. They apply to this session only; check the BOS log for details.', { type: 'error' });
-        return;
-      }
-      closeModal();
-      window.dispatchEvent(new CustomEvent('bos:settings-saved'));
-      window.BOSUI.toast('Settings saved. OBS host, port or password changes apply the next time BOS connects to OBS.', { type: 'success' });
+      window.goalActionLabels = {
+        home: newConfig.goalWorkflow.homeGoalActionLabel,
+        away: newConfig.goalWorkflow.awayGoalActionLabel
+      };
+      window.MatchModule.refreshGoalLabels();
+      modal.classList.add('hidden');
+      alert('Settings saved successfully!');
     } catch (e) {
       console.error('Failed to save settings:', e);
-      window.BOSUI.toast('Settings could not be saved: ' + e.message, { type: 'error' });
+      alert('Error saving settings: ' + e.message);
     }
   }
 
