@@ -13,7 +13,7 @@
       "color": "#eab308",
       "secondaryColor": "#713f12",
       "hotkey": "KeyT",
-      "score": 13,
+      "score": 14,
       "logo": ""
     },
     "away": {
@@ -22,7 +22,7 @@
       "color": "#e11d48",
       "secondaryColor": "#7f1d1d",
       "hotkey": "KeyG",
-      "score": 35,
+      "score": 34,
       "logo": ""
     }
   },
@@ -67,7 +67,7 @@
     "animationStyle": "slide-in",
     "lowerThirdColor": "#eab308",
     "remoteControlKey": "MEDIAUNIT123",
-    "remoteImmediateScore": false
+    "remoteImmediateScore": true
   },
   "transitions": {
     "defaultTransition": "Fade",
@@ -102,6 +102,6 @@
     "awaySetsWon": 0,
     "offenseSeconds": 24,
     "offenseTimerSeconds": 24,
-    "startSeconds": 120
+    "startSeconds": 420
   }
 }
