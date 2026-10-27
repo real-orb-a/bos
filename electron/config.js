@@ -44,7 +44,7 @@ class ConfigManager extends EventEmitter {
           { id: 'cam2', name: 'Camera 2', enabled: false, hotkeyName: '', contextName: '' }
         ]
       },
-      graphics: { httpPort: 8088, wsPort: 8088, defaultLowerThirdDuration: 5, animationStyle: 'slide-in', lowerThirdColor: '#eab308', remoteImmediateScore: false },
+      graphics: { httpPort: 8088, wsPort: 8088, defaultLowerThirdDuration: 5, animationStyle: 'slide-in', lowerThirdColor: '#eab308', remoteImmediateScore: false, centerScorebugDelayMs: 500 },
       transitions: { defaultTransition: 'Fade', durationMs: 300 },
       match: {
         // 'stopwatch' counts up to the set time (football), 'countdown' counts down (basketball).

@@ -38,6 +38,11 @@ class GraphicsEngine extends EventEmitter {
     this.replayOverlayActive = false;
     this.replayOverlayData = null;
     this.scorebugVisible = true;
+    this.scorebugExpanded = false;
+    this.scorebugMatchName = '';
+    this.sportScorebug = null;
+    this.screenCenterScorebugVisible = false;
+    this.athleticsStandings = { active: false, event: null, houses: [] };
     this.topMessageActive = false;
     this.topMessageData = null;
 
@@ -243,7 +248,7 @@ class GraphicsEngine extends EventEmitter {
       switch (command.action) {
         case 'SCORE_ADJUST': {
           if (!this.remoteImmediateScore) {
-            throw new Error('Immediate score updates are disabled in BOS.');
+            throw new Error('Immediate score updates are disabled in SLC.');
           }
           if (!['home', 'away'].includes(command.team) || ![-1, 1].includes(command.amount)) {
             throw new Error('Invalid score adjustment.');
@@ -350,17 +355,21 @@ class GraphicsEngine extends EventEmitter {
         res.end(`
           <!DOCTYPE html>
           <html>
-          <head><title>BOS Graphics Engine</title><style>body{font-family:sans-serif;background:#0f172a;color:#fff;padding:40px;line-height:1.6}a{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:18px}li{margin:12px 0}</style></head>
+          <head><title>SLC Graphics Engine</title><style>body{font-family:sans-serif;background:#0f172a;color:#fff;padding:40px;line-height:1.6}a{color:#38bdf8;text-decoration:none;font-weight:bold;font-size:18px}li{margin:12px 0}</style></head>
           <body>
-            <h1>BOS Broadcast Graphics Server</h1>
+            <h1>SLC Broadcast Graphics Server</h1>
             <p>Active Browser Sources for OBS Studio:</p>
             <ul>
               <li><a href="/graphics/score/" target="_blank">Score Bug (/graphics/score/)</a></li>
-              <li><a href="/remote/" target="_blank">Key-Protected Browser Remote (/remote/)</a></li>
+              <li><a href="/graphics/screen-center-scorebug/" target="_blank">Screen Center Scorebug (/graphics/screen-center-scorebug/)</a></li>
+              <li><a href="/graphics/basketball/" target="_blank">Basketball Score Bug (/graphics/basketball/)</a></li>
+              <li><a href="/graphics/volleyball/" target="_blank">Volleyball Score Bug (/graphics/volleyball/)</a></li>
+              <li><a href="/graphics/transitions/" target="_blank">Transitions (/graphics/transitions/)</a></li>
               <li><a href="/graphics/goal/" target="_blank">Goal Celebration (/graphics/goal/)</a></li>
               <li><a href="/graphics/lower-third/" target="_blank">Lower Third & F1 Review (/graphics/lower-third/)</a></li>
               <li><a href="/graphics/top-message/" target="_blank">Top Message (/graphics/top-message/)</a></li>
               <li><a href="/graphics/replay/" target="_blank">Replay Overlay (/graphics/replay/)</a></li>
+              <li><a href="/remote/" target="_blank">Key-Protected Browser Remote (/remote/)</a></li>
             </ul>
           </body>
           </html>
@@ -427,7 +436,12 @@ class GraphicsEngine extends EventEmitter {
           active: this.replayOverlayActive,
           data: this.replayOverlayData
         },
-        scorebugVisible: this.scorebugVisible
+        scorebugVisible: this.scorebugVisible,
+        scorebugExpanded: this.scorebugExpanded,
+        scorebugMatchName: this.scorebugMatchName,
+        screenCenterScorebugVisible: this.screenCenterScorebugVisible,
+        sportScorebug: this.sportScorebug,
+        athleticsStandings: this.athleticsStandings
       };
       ws.send(JSON.stringify(initPayload));
 
@@ -487,16 +501,129 @@ class GraphicsEngine extends EventEmitter {
 
   broadcastScoreUpdate(animationType = 'pop', changedTeam = null) {
     const payload = this.scoreGraphics.getPayload(animationType, changedTeam);
+    payload.sportScorebug = this.sportScorebug;
     this.broadcast(payload);
   }
 
+  setSportScorebugState(session) {
+    this.sportScorebug = null;
+    if (session?.modeId === 'volleyball') {
+      const state = session.sportState || {};
+      const homeSets = state.sets?.home || 0;
+      const awaySets = state.sets?.away || 0;
+      const bestOf = state.bestOf || 5;
+      const score = this.scoreManager.getScore();
+      this.sportScorebug = {
+        mode: 'volleyball',
+        homeName: session.teams.home.name,
+        awayName: session.teams.away.name,
+        homeScore: score.home.score,
+        awayScore: score.away.score,
+        homeSets,
+        awaySets,
+        target: homeSets + awaySets >= bestOf - 1
+          ? (state.decidingSetPointsToWin || 15)
+          : (state.pointsToWin || 25),
+        pointsToWinBy: state.pointsToWinBy || 2
+      };
+    } else if (session?.modeId === 'cricket') {
+      const state = session.sportState || {};
+      this.sportScorebug = {
+        mode: 'cricket',
+        period: state.period || '1st Innings',
+        homeWickets: state.wickets?.home || 0,
+        awayWickets: state.wickets?.away || 0,
+        homeOvers: state.overs?.home || 0,
+        awayOvers: state.overs?.away || 0
+      };
+    } else if (['table-tennis', 'badminton'].includes(session?.modeId)) {
+      const state = session.sportState || {};
+      this.sportScorebug = {
+        mode: session.modeId === 'table-tennis' ? 'table-tennis' : 'games',
+        ...(session.modeId === 'table-tennis' ? {
+          homeName: session.teams.home.name,
+          awayName: session.teams.away.name,
+          target: state.pointsToWin || 11,
+          pointsToWinBy: state.pointsToWinBy || 2
+        } : {}),
+        homeSets: state.sets?.home || 0,
+        awaySets: state.sets?.away || 0,
+        ...(session.modeId === 'table-tennis' ? {
+          matchFormat: state.tableTennis?.format || 'singles',
+          homePlayers: state.tableTennis?.players?.home || [],
+          awayPlayers: state.tableTennis?.players?.away || []
+        } : {})
+      };
+    }
+    this.broadcast({ type: 'SPORT_SCOREBUG_UPDATE', sportScorebug: this.sportScorebug });
+    return this.sportScorebug;
+  }
+
   setScorebugVisible(visible) {
-    this.scorebugVisible = !!visible;
+    const next = !!visible;
+    const changed = next !== this.scorebugVisible;
+    this.scorebugVisible = next;
+
+    // Mutual exclusion: if the normal score bug is being faded in while the
+    // center score bug is visible, fade the center one out first.
+    if (changed && next && this.screenCenterScorebugVisible) {
+      this.screenCenterScorebugVisible = false;
+      this.broadcast({
+        type: 'SCREEN_CENTER_SCOREBUG_VISIBILITY',
+        visible: false
+      });
+    }
+
     this.broadcast({
       type: 'SCOREBUG_VISIBILITY',
       visible: this.scorebugVisible
     });
     return this.scorebugVisible;
+  }
+
+  setScorebugExpanded(expanded) {
+    this.scorebugExpanded = !!expanded;
+    this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: this.scorebugExpanded });
+    return this.scorebugExpanded;
+  }
+
+  // Screen center scorebug: a separate browser-source graphic that phases in
+  // from the center of the screen. When it is shown the regular (corner) score
+  // bug fades out, and when it fades out the corner score bug comes back — so
+  // the two are mutually exclusive and both stay in sync via the same WS state.
+  setScreenCenterScorebugVisible(visible) {
+    const next = !!visible;
+    const changed = next !== this.screenCenterScorebugVisible;
+    this.screenCenterScorebugVisible = next;
+
+    // Cross-fade with the main score bug: center in => corner out, center out => corner in.
+    if (changed) {
+      this.setScorebugVisible(!next);
+    }
+
+    this.broadcast({
+      type: 'SCREEN_CENTER_SCOREBUG_VISIBILITY',
+      visible: this.screenCenterScorebugVisible
+    });
+    return this.screenCenterScorebugVisible;
+  }
+
+  setScorebugMatchName(name) {
+    if (typeof name !== 'string' || name.length > 120) {
+      throw new Error('Scorebug match name must be 120 characters or fewer.');
+    }
+    this.scorebugMatchName = name.trim();
+    this.broadcast({ type: 'SCOREBUG_MATCH_NAME', name: this.scorebugMatchName });
+    return this.scorebugMatchName;
+  }
+
+  setAthleticsStandings(standings) {
+    if (!standings || typeof standings !== 'object') {
+      throw new Error('Athletics standings state must be an object.');
+    }
+    this.athleticsStandings = JSON.parse(JSON.stringify(standings));
+    this.broadcast({ type: 'ATHLETICS_STANDINGS_UPDATE', standings: this.athleticsStandings });
+    return this.athleticsStandings;
   }
 
   // Used by workflows to choose the score animation before the score actually

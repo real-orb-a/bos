@@ -20,15 +20,6 @@ window.SettingsModule = (function() {
   const cfgReplaySources = document.getElementById('cfg-replay-sources');
   const btnAddReplaySource = document.getElementById('btn-add-replay-source');
 
-  // Teams
-  const cfgTeamHomeName = document.getElementById('cfg-team-home-name');
-  const cfgTeamHomeShort = document.getElementById('cfg-team-home-short');
-  const cfgTeamHomeColor = document.getElementById('cfg-team-home-color');
-  const cfgTeamHomeHotkey = document.getElementById('cfg-team-home-hotkey');
-  const cfgTeamAwayName = document.getElementById('cfg-team-away-name');
-  const cfgTeamAwayShort = document.getElementById('cfg-team-away-short');
-  const cfgTeamAwayColor = document.getElementById('cfg-team-away-color');
-  const cfgTeamAwayHotkey = document.getElementById('cfg-team-away-hotkey');
   const cfgHomeGoalAction = document.getElementById('cfg-home-goal-action');
   const cfgAwayGoalAction = document.getElementById('cfg-away-goal-action');
 
@@ -86,35 +77,6 @@ window.SettingsModule = (function() {
       renderReplaySources(sources);
     });
 
-    // House palette swatches (Garnet red / Emerald green / Topaz yellow)
-    document.querySelectorAll('.house-swatch').forEach((sw) => {
-      sw.addEventListener('click', async () => {
-        try {
-          const side = sw.dataset.side;
-          const colorInput = side === 'home' ? cfgTeamHomeColor : cfgTeamAwayColor;
-          const nameInput = side === 'home' ? cfgTeamHomeName : cfgTeamAwayName;
-          const shortInput = side === 'home' ? cfgTeamHomeShort : cfgTeamAwayShort;
-          const hotkeyInput = side === 'home' ? cfgTeamHomeHotkey : cfgTeamAwayHotkey;
-          const team = {
-            name: sw.dataset.name,
-            short: sw.dataset.short,
-            color: sw.dataset.color,
-            secondaryColor: sw.dataset.secondaryColor,
-            hotkey: sw.dataset.hotkey
-          };
-          colorInput.value = team.color;
-          nameInput.value = team.name;
-          shortInput.value = team.short;
-          hotkeyInput.value = formatHotkey(team.hotkey);
-          document.querySelectorAll(`.house-swatch[data-side="${side}"]`).forEach(button => {
-            button.classList.toggle('active', button === sw);
-          });
-          await window.bosAPI.score.updateTeams({ [side]: team });
-        } catch (e) {
-          console.error('House preset error:', e);
-        }
-      });
-    });
   }
 
   async function loadFormData() {
@@ -137,18 +99,6 @@ window.SettingsModule = (function() {
       if (config.replay) {
         cfgReplayEnabled.checked = config.replay.enabled !== false;
         renderReplaySources(config.replay.captureSources || []);
-      }
-
-      if (config.teams) {
-        cfgTeamHomeName.value = config.teams.home?.name || 'GARNET';
-        cfgTeamHomeShort.value = config.teams.home?.short || 'GAR';
-        cfgTeamHomeColor.value = config.teams.home?.color || '#e11d48';
-        cfgTeamHomeHotkey.value = formatHotkey(config.teams.home?.hotkey || defaultTeamHotkey(config.teams.home?.name, 'KeyG'));
-
-        cfgTeamAwayName.value = config.teams.away?.name || 'TOPAZ';
-        cfgTeamAwayShort.value = config.teams.away?.short || 'TOP';
-        cfgTeamAwayColor.value = config.teams.away?.color || '#0284c7';
-        cfgTeamAwayHotkey.value = formatHotkey(config.teams.away?.hotkey || defaultTeamHotkey(config.teams.away?.name, 'KeyT'));
       }
 
       if (config.goalWorkflow) {
@@ -189,20 +139,6 @@ window.SettingsModule = (function() {
         enabled: cfgReplayEnabled.checked,
         captureSources: collectReplaySources()
       },
-      teams: {
-        home: {
-          name: cfgTeamHomeName.value.trim().toUpperCase(),
-          short: cfgTeamHomeShort.value.trim().toUpperCase(),
-          color: cfgTeamHomeColor.value,
-          hotkey: normalizeHotkey(cfgTeamHomeHotkey.value, 'KeyG')
-        },
-        away: {
-          name: cfgTeamAwayName.value.trim().toUpperCase(),
-          short: cfgTeamAwayShort.value.trim().toUpperCase(),
-          color: cfgTeamAwayColor.value,
-          hotkey: normalizeHotkey(cfgTeamAwayHotkey.value, 'KeyT')
-        }
-      },
       goalWorkflow: {
         ...(currentConfig.goalWorkflow || {}),
         showGoalAnimation: cfgGoalAnim.checked,
@@ -218,7 +154,6 @@ window.SettingsModule = (function() {
 
     try {
       await window.bosAPI.config.updateAll(newConfig);
-      await window.bosAPI.score.updateTeams(newConfig.teams);
       window.goalActionLabels = {
         home: newConfig.goalWorkflow.homeGoalActionLabel,
         away: newConfig.goalWorkflow.awayGoalActionLabel
@@ -276,23 +211,6 @@ window.SettingsModule = (function() {
         contextName: row.querySelector('[data-field="contextName"]').value.trim()
       }))
       .filter(source => source.id && source.name);
-  }
-
-  function defaultTeamHotkey(name, fallback) {
-    const keys = { GARNET: 'KeyG', EMERALD: 'KeyE', TOPAZ: 'KeyT' };
-    return keys[String(name || '').trim().toUpperCase()] || fallback;
-  }
-
-  function normalizeHotkey(value, fallback) {
-    const key = value.trim();
-    if (!key) return fallback;
-    if (/^[a-z]$/i.test(key)) return `Key${key.toUpperCase()}`;
-    if (/^\d$/.test(key)) return `Digit${key}`;
-    return key;
-  }
-
-  function formatHotkey(code) {
-    return String(code || '').replace(/^(Key|Digit)/, '');
   }
 
   return { init };

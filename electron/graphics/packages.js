@@ -22,7 +22,7 @@ class PackageManager extends EventEmitter {
     const result = [
       {
         name: 'default',
-        displayName: 'BOS Default Broadcast Package',
+        displayName: 'SLC Default Broadcast Package',
         description: 'Standard built-in television broadcast graphics & transitions',
         path: path.resolve(__dirname, '..', '..', 'graphics'),
         isBuiltIn: true

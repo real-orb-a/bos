@@ -1,30 +1,18 @@
 const EventEmitter = require('events');
+const path = require('path');
 
 /**
- * ReplayEngine (v2 — Source Record trigger service)
- * -------------------------------------------------
- * BOS no longer implements ANY replay capture/generation pipeline: no FFmpeg, no
- * rolling buffer, no clip extraction, no trimming, no media loading, no playback.
- *
- * Replay capture is owned entirely by the "Source Record" OBS plugin, which keeps
- * its own Replay Buffer running. BOS's only job here is to ask OBS to trigger
- * Source Record's "Save Replay Buffer" hotkey through the OBS WebSocket request
- * `TriggerHotkeyByName`.
- *
- *   BOS ──▶ OBS WebSocket TriggerHotkeyByName ──▶ Source Record filter ──▶ file
- *
- * `replay.hotkeyName` and `replay.contextName` are sent as separate fields in
- * `TriggerHotkeyByName`. Each capture source may override either value.
- *
- * BOS does not select saved files, load OBS media sources, or control playback.
- * Goal workflow can switch between the configured REPLAY and LIVE scenes, but the
- * OBS scene/plugin setup is responsible for presenting and playing the footage.
+ * ReplayEngine delegates capture to OBS Source Record and controls playback
+ * through an OBS Media Source. OBS remains responsible for writing replay files.
  */
 class ReplayEngine extends EventEmitter {
-  constructor(configManager, obsClient) {
+  constructor(configManager, obsClient, sourcesController, scenesController) {
     super();
     this.config = configManager;
     this.obs = obsClient;
+    this.sources = sourcesController;
+    this.scenes = scenesController;
+    this.airing = false;
 
     // The state represents the REQUEST, not any footage contents:
     //   IDLE → TRIGGERING → TRIGGERED | ERROR
@@ -150,23 +138,54 @@ class ReplayEngine extends EventEmitter {
     };
   }
 
-  /**
-   * Operation B — Air Replay (FUTURE).
-   * Selecting the saved file, loading the OBS replay media source, switching to
-   * the REPLAY scene, playing, and returning to LIVE. Deliberately NOT
-   * implemented in this phase — kept as the extension point for the airing system.
-   */
-  async airReplay(/* clip */) {
-    return {
-      ok: false,
-      state: this.state,
-      message: 'Replay airing is not implemented in this phase.'
-    };
+  /** Load a selected file into OBS, air it, then return to LIVE when stopped/ended. */
+  async airReplay(filePath) {
+    if (typeof filePath !== 'string' || !filePath || !this.sources || !this.scenes) {
+      throw new Error('Choose a replay video before airing it.');
+    }
+    if (!this.obs.isConnected) throw new Error('OBS is not connected — cannot air a replay.');
+
+    const mediaSource = this.config.get('scenes.replayMediaSource') || 'Replay Video';
+    const configured = await this.sources.setMediaSourceFile(mediaSource, filePath, false);
+    if (!configured) throw new Error(`OBS media source "${mediaSource}" could not load the selected replay.`);
+
+    const switched = await this.scenes.switchToReplay();
+    if (!switched) throw new Error('OBS could not switch to the configured replay scene.');
+    const started = await this.sources.playMedia(mediaSource);
+    if (!started) {
+      await this.scenes.switchToLive();
+      throw new Error(`OBS could not start replay media source "${mediaSource}".`);
+    }
+
+    this.airing = true;
+    this.lastResult = { fileName: path.basename(filePath), timestamp: Date.now() };
+    this.emit('replayStateChanged', this.getStatus());
+    return { ok: true, state: 'AIRING', ...this.lastResult };
+  }
+
+  async stopReplay() {
+    if (!this.airing) return { ok: true, state: 'IDLE' };
+    const mediaSource = this.config.get('scenes.replayMediaSource') || 'Replay Video';
+    const stopped = await this.sources.stopMedia(mediaSource);
+    if (!stopped) throw new Error(`OBS could not stop replay media source "${mediaSource}".`);
+    const live = await this.scenes.switchToLive();
+    if (!live) throw new Error('OBS could not return to the configured LIVE scene.');
+    this.airing = false;
+    this.emit('replayStateChanged', this.getStatus());
+    return { ok: true, state: 'IDLE' };
+  }
+
+  async handlePlaybackEnded(inputName) {
+    const replaySource = this.config.get('scenes.replayMediaSource') || 'Replay Video';
+    if (!this.airing || inputName !== replaySource) return false;
+    await this.stopReplay();
+    return true;
   }
 
   getStatus() {
     return {
       enabled: this.enabled,
+      airing: this.airing,
       state: this.state,
       lastResult: this.lastResult,
       lastError: this.lastError,

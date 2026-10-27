@@ -67,7 +67,8 @@
     "wsPort": 8088,
     "defaultLowerThirdDuration": 5,
     "animationStyle": "slide-in",
-    "lowerThirdColor": "#eab308"
+    "lowerThirdColor": "#eab308",
+    "centerScorebugDelayMs": 500
   },
   "transitions": {
     "defaultTransition": "Fade",

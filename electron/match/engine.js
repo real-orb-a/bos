@@ -65,6 +65,7 @@ class MatchEngine extends EventEmitter {
     this.offenseSeconds = Number.isFinite(configuredOffenseSeconds) && configuredOffenseSeconds >= 0
       ? Math.min(configuredOffenseSeconds, this.offenseLimitSeconds)
       : this.offenseLimitSeconds;
+    this.offenseTimerEnabled = this.config.get('match.offenseTimerEnabled') === true;
     this.offenseRunning = false;
 
     this.elapsedSeconds = this.startSeconds;
@@ -196,8 +197,20 @@ class MatchEngine extends EventEmitter {
       display: this._formatClockSeconds(offenseSeconds),
       formatted: this._formatClockSeconds(offenseSeconds),
       limitSeconds: this.offenseLimitSeconds,
-      active: this.offenseLimitSeconds > 0
+      enabled: this.offenseTimerEnabled,
+      active: this.offenseTimerEnabled && this.offenseLimitSeconds > 0
     };
+  }
+
+  setOffenseClockEnabled(enabled) {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('Offense timer enabled state must be a boolean.');
+    }
+    this.offenseTimerEnabled = enabled;
+    if (!enabled) this.offenseRunning = false;
+    this.config.set('match.offenseTimerEnabled', enabled);
+    this.emit('offenseChanged', this.getOffenseClockState());
+    return this.getOffenseClockState();
   }
 
   setOffenseClock(secondsOrConfig = {}) {
@@ -239,7 +252,7 @@ class MatchEngine extends EventEmitter {
   }
 
   startOffenseClock() {
-    if (this.offenseLimitSeconds <= 0) {
+    if (!this.offenseTimerEnabled || this.offenseLimitSeconds <= 0) {
       this.offenseRunning = false;
       return this.getOffenseClockState();
     }
@@ -637,6 +650,55 @@ class MatchEngine extends EventEmitter {
       score: this.score.getScore(),
       sets: this.getSetState()
     };
+  }
+
+  restoreState(state) {
+    if (!state || typeof state !== 'object' || !state.clock || typeof state.clock !== 'object') {
+      throw new Error('Saved match state is invalid and cannot be restored.');
+    }
+    const clock = state.clock;
+    const validNumber = (value, min, max) =>
+      Number.isSafeInteger(value) && value >= min && value <= max;
+    if (!validNumber(clock.regulationSeconds, 1, 86400) ||
+        !validNumber(clock.elapsedSeconds, 0, clock.regulationSeconds) ||
+        !['stopwatch', 'countdown', 'none'].includes(clock.mode) ||
+        typeof clock.period !== 'string' || clock.period.length > 80) {
+      throw new Error('Saved match clock data is invalid and cannot be restored.');
+    }
+
+    this.state = Object.values(MatchStates).includes(state.matchState)
+      ? state.matchState
+      : MatchStates.PRE_MATCH;
+    this.tempState = TemporaryStates.NONE;
+    this.isSequenceRunning = false;
+    this.activeSequenceName = null;
+    this.clockRunning = false;
+    this.offenseRunning = false;
+    this.timerMode = clock.mode;
+    this.regulationSeconds = clock.regulationSeconds;
+    this.elapsedSeconds = clock.elapsedSeconds;
+    this.period = clock.period;
+    this.startSeconds = validNumber(clock.startSeconds, 0, clock.regulationSeconds)
+      ? clock.startSeconds
+      : (clock.mode === 'countdown' ? clock.regulationSeconds : 0);
+    this.hasConfiguredStartSeconds = true;
+    this.stoppageTimeMinutes = validNumber(clock.stoppageMinutes, 0, 240) ? clock.stoppageMinutes : 0;
+    this.stoppageElapsedSeconds = validNumber(clock.stoppageElapsedSeconds, 0, 14400)
+      ? Math.min(clock.stoppageElapsedSeconds, this.stoppageTimeMinutes * 60)
+      : 0;
+    this.inStoppage = clock.inStoppage === true && this.stoppageTimeMinutes > 0;
+    this.awaitingStoppageApproval = clock.awaitingStoppageApproval === true && !this.inStoppage;
+    if (state.sets && Array.isArray(state.sets.completedSets)) {
+      this.completedSets = state.sets.completedSets.filter(set =>
+        set && Number.isSafeInteger(set.number) && ['home', 'away'].includes(set.winner)
+      );
+      this.homeSetsWon = this.completedSets.filter(set => set.winner === 'home').length;
+      this.awaySetsWon = this.completedSets.filter(set => set.winner === 'away').length;
+      if (validNumber(state.sets.bestOfSets, 1, 9)) this.bestOfSets = state.sets.bestOfSets;
+    }
+    this.emit('clockChanged', this.getClockState());
+    this.emit('stateChanged', { current: this.state, state: this.getFullState() });
+    return this.getFullState();
   }
 
   destroy() {

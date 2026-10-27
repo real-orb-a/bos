@@ -49,6 +49,10 @@ class OBSClient extends EventEmitter {
       this.recordStatus.active = data.outputActive;
       this.emit('recordStatusChanged', this.recordStatus);
     });
+
+    this.obs.on('MediaInputPlaybackEnded', (data) => {
+      this.emit('mediaPlaybackEnded', data.inputName);
+    });
   }
 
   async connect() {

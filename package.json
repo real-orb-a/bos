@@ -1,7 +1,7 @@
 {
   "name": "bos",
   "version": "1.0.0",
-  "description": "BOS — Broadcast Operator System. Professional desktop broadcast-control and automation layer for OBS.",
+  "description": "SLC — Sports Livestream Controller for school sports and formal-event broadcasts.",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
@@ -18,7 +18,7 @@
     "automation",
     "electron"
   ],
-  "author": "BOS Engineering",
+  "author": "SLC Engineering",
   "license": "ISC",
   "dependencies": {
     "electron": "^41.2.0",

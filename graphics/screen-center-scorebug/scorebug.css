@@ -1,0 +1,35 @@
+@import url('../score/score.css');
+
+/* ------------------------------------------------------------------
+   Screen center scorebug — exact normal score bug, dead center.
+   Reuses score.css for ALL styling (expanded layout, scores, clock,
+   offense banner, sets, volleyball/cricket panels). The only overrides
+   are centering and the fade-in-from-center animation. The expanded
+   class is toggled via WebSocket (SCOREBUG_EXPANSION), same as the
+   normal score bug.
+   ------------------------------------------------------------------ */
+.score-bug {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 60;
+  transition:
+    opacity 0.4s ease,
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0.4s;
+}
+
+.score-bug.center-visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 0.35s ease,
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
+}

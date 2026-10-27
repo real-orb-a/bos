@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('bosAPI', {
+const api = {
   // OBS
   obs: {
     connect: () => ipcRenderer.invoke('obs:connect'),
@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('bosAPI', {
     clockReset: () => ipcRenderer.invoke('match:clockReset'),
     setClock: (data) => ipcRenderer.invoke('match:setClock', data),
     setOffenseClock: (data) => ipcRenderer.invoke('match:setOffenseClock', data),
+    setOffenseClockEnabled: (enabled) => ipcRenderer.invoke('match:setOffenseClockEnabled', enabled),
     setOffenseTimer: (data) => ipcRenderer.invoke('match:setOffenseClock', data),
     setOffenseTime: (data) => ipcRenderer.invoke('match:setOffenseClock', data),
     startOffenseClock: () => ipcRenderer.invoke('match:startOffenseClock'),
@@ -139,6 +140,7 @@ contextBridge.exposeInMainWorld('bosAPI', {
     capture: (options) => ipcRenderer.invoke('replay:capture', options),
     captureAll: () => ipcRenderer.invoke('replay:captureAll'),
     air: (clip) => ipcRenderer.invoke('replay:air', clip),
+    stop: () => ipcRenderer.invoke('replay:stop'),
     onStateChanged: (callback) => {
       const cb = (_, data) => callback(data);
       ipcRenderer.on('replay:stateChanged', cb);
@@ -163,6 +165,11 @@ contextBridge.exposeInMainWorld('bosAPI', {
     triggerTransition: (data) => ipcRenderer.invoke('graphics:triggerTransition', data),
     getScorebugVisible: () => ipcRenderer.invoke('graphics:getScorebugVisible'),
     setScorebugVisible: (visible) => ipcRenderer.invoke('graphics:setScorebugVisible', visible),
+    setScorebugExpanded: (expanded) => ipcRenderer.invoke('graphics:setScorebugExpanded', expanded),
+    getScreenCenterScorebugVisible: () =>
+      ipcRenderer.invoke('graphics:getScreenCenterScorebugVisible'),
+    setScreenCenterScorebugVisible: (visible) =>
+      ipcRenderer.invoke('graphics:setScreenCenterScorebugVisible', visible),
     getRemoteControlInfo: () => ipcRenderer.invoke('graphics:getRemoteControlInfo'),
     setRemoteControlPassword: (password) => ipcRenderer.invoke('graphics:setRemoteControlPassword', password),
     setRemoteImmediateScore: (enabled) => ipcRenderer.invoke('graphics:setRemoteImmediateScore', enabled),
@@ -220,5 +227,41 @@ contextBridge.exposeInMainWorld('bosAPI', {
     get: (key) => ipcRenderer.invoke('config:get', key),
     set: (key, value) => ipcRenderer.invoke('config:set', { key, value }),
     updateAll: (newConfig) => ipcRenderer.invoke('config:updateAll', newConfig)
+  },
+
+  teams: {
+    getCatalog: () => ipcRenderer.invoke('teams:getCatalog')
+  },
+
+  session: {
+    getState: () => ipcRenderer.invoke('session:getState'),
+    create: (data) => ipcRenderer.invoke('session:create', data),
+    activate: () => ipcRenderer.invoke('session:activate'),
+    resume: () => ipcRenderer.invoke('session:resume'),
+    discard: () => ipcRenderer.invoke('session:discard'),
+    end: () => ipcRenderer.invoke('session:end'),
+    addParticipant: input => ipcRenderer.invoke('session:addParticipant', input),
+    updateCompetitionName: name => ipcRenderer.invoke('session:updateCompetitionName', name),
+    removeParticipant: id => ipcRenderer.invoke('session:removeParticipant', id),
+    setTeamLogo: (side, dataUrl) => ipcRenderer.invoke('session:setTeamLogo', { side, dataUrl }),
+    addAthleticsHouse: (name) => ipcRenderer.invoke('session:addAthleticsHouse', { name }),
+    setAthleticsHouseLogo: (houseId, dataUrl) =>
+      ipcRenderer.invoke('session:setAthleticsHouseLogo', { houseId, dataUrl }),
+    updateSportState: patch => ipcRenderer.invoke('session:updateSportState', patch),
+    applyScoreChange: (side, amount) => ipcRenderer.invoke('session:applyScoreChange', { side, amount }),
+    setAthleticsEvent: input => ipcRenderer.invoke('session:setAthleticsEvent', input),
+    setAthleticsPodiumVisible: visible => ipcRenderer.invoke('session:setAthleticsPodiumVisible', visible),
+    recordAthleticsResult: input => ipcRenderer.invoke('session:recordAthleticsResult', input),
+    removeAthleticsResult: resultId => ipcRenderer.invoke('session:removeAthleticsResult', resultId),
+    getAthleticsStandings: () => ipcRenderer.invoke('session:getAthleticsStandings'),
+    chooseReplayFile: () => ipcRenderer.invoke('replay:chooseFile'),
+    onStorageError: (callback) => {
+      const cb = (_, message) => callback(message);
+      ipcRenderer.on('session:storageError', cb);
+      return () => ipcRenderer.removeListener('session:storageError', cb);
+    }
   }
-});
+};
+
+contextBridge.exposeInMainWorld('slcAPI', api);
+contextBridge.exposeInMainWorld('bosAPI', api);

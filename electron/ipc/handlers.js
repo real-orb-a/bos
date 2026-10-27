@@ -1,4 +1,5 @@
-const { ipcMain } = require('electron');
+const { ipcMain, dialog } = require('electron');
+const path = require('path');
 
 function registerIpcHandlers({
   mainWindow,
@@ -12,13 +13,160 @@ function registerIpcHandlers({
   eventLogger,
   replayEngine,
   graphicsEngine,
-  goalWorkflow
+  goalWorkflow,
+  sessionManager,
+  loadTeamCatalog
 }) {
+  let selectedReplayPath = null;
   const sendToRenderer = (channel, ...args) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send(channel, ...args);
     }
   };
+
+  ipcMain.handle('teams:getCatalog', () => loadTeamCatalog());
+  ipcMain.handle('session:getState', () => sessionManager.getState());
+  ipcMain.handle('session:create', (_, data) => {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Session details are required.');
+    }
+    const teams = loadTeamCatalog();
+    const findTeam = id => teams.find(team => team.id === id);
+    const homeTeam = data.mode === 'athletics' ? null : findTeam(data.homeTeamId);
+    const awayTeam = data.mode === 'athletics' ? null : findTeam(data.awayTeamId);
+    if (data.mode !== 'athletics' && data.mode !== 'formal-event' && (!homeTeam || !awayTeam)) {
+      throw new Error('Choose both teams from the configured team catalog.');
+    }
+    if (homeTeam && awayTeam && homeTeam.id === awayTeam.id) {
+      throw new Error('Choose two different teams.');
+    }
+    const session = sessionManager.create({
+      ...data,
+      homeTeam: homeTeam?.name,
+      awayTeam: awayTeam?.name,
+      homeTeamBrand: homeTeam,
+      awayTeamBrand: awayTeam,
+      athleticsHouses: data.mode === 'athletics' ? teams : undefined
+    });
+    graphicsEngine.setScorebugMatchName(session.competition.name);
+    if (session.teams) {
+      const currentTeams = scoreManager.getScore();
+      const scoreTeam = team => ({
+        ...team,
+        short: team.name.toLocaleLowerCase() === 'garnet' ? 'GAR'
+          : team.name.toLocaleLowerCase() === 'emerald' ? 'EME'
+            : team.name.toLocaleLowerCase() === 'topaz' ? 'TOP' : team.shortName || team.short,
+        color: team.primaryColor || team.color
+      });
+      scoreManager.updateTeams({
+        home: { ...currentTeams.home, ...scoreTeam(session.teams.home) },
+        away: { ...currentTeams.away, ...scoreTeam(session.teams.away) }
+      });
+    }
+    matchEngine.pauseClock();
+    matchEngine.pauseOffenseClock();
+    scoreManager.resetScore();
+    matchEngine.resetSets();
+    matchEngine.resetClock();
+    matchEngine.setMatchState('PRE_MATCH');
+    const clockConfig = {
+      football: { mode: 'stopwatch', minutes: 90, period: '1st Half' },
+      basketball: { mode: 'countdown', minutes: 10, period: '1st Quarter' },
+      cricket: { mode: 'none', minutes: 90, period: '1st Innings' },
+      netball: { mode: 'countdown', minutes: 15, period: '1st Quarter' },
+      volleyball: { mode: 'none', minutes: 90, period: 'Set 1' },
+      'table-tennis': { mode: 'none', minutes: 90, period: 'Game 1' },
+      badminton: { mode: 'none', minutes: 90, period: 'Game 1' },
+      athletics: { mode: 'stopwatch', minutes: 90, period: 'Event' },
+      'formal-event': { mode: 'none', minutes: 90, period: 'Programme' }
+    }[session.modeId];
+    matchEngine.setTimerMode(clockConfig.mode);
+    matchEngine.setClock({ regulationMinutes: clockConfig.minutes });
+    matchEngine.setStartTime(clockConfig.mode === 'countdown' ? clockConfig.minutes * 60 : 0);
+    matchEngine.setPeriod(clockConfig.period);
+    if (obsClient.getStatus().stream.active) sessionManager.updateStatus('LIVE');
+    graphicsEngine.setScorebugVisible(!['athletics', 'formal-event'].includes(session.modeId));
+    graphicsEngine.setScorebugExpanded(false);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    graphicsEngine.setSportScorebugState(session);
+    return session;
+  });
+  ipcMain.handle('session:activate', () => sessionManager.activate());
+  ipcMain.handle('session:resume', () => {
+    const session = sessionManager.resume();
+    graphicsEngine.setScorebugVisible(!['athletics', 'formal-event'].includes(session.modeId));
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    graphicsEngine.setScorebugMatchName(session.competition.name);
+    graphicsEngine.setSportScorebugState(session);
+    return session;
+  });
+  ipcMain.handle('session:discard', () => {
+    const session = sessionManager.discard();
+    graphicsEngine.setSportScorebugState(null);
+    return session;
+  });
+  ipcMain.handle('session:end', () => {
+    const session = sessionManager.end();
+    graphicsEngine.setSportScorebugState(null);
+    return session;
+  });
+  ipcMain.handle('session:addParticipant', (_, input) => sessionManager.addParticipant(input));
+  ipcMain.handle('session:updateCompetitionName', (_, name) => {
+    const session = sessionManager.updateCompetitionName(name);
+    graphicsEngine.setScorebugMatchName(session.competition.name);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:removeParticipant', (_, id) => sessionManager.removeParticipant(id));
+  ipcMain.handle('session:setTeamLogo', (_, { side, dataUrl }) => {
+    const session = sessionManager.setTeamLogo(side, dataUrl);
+    scoreManager.updateTeams({ [side]: { logo: dataUrl } });
+    return session;
+  });
+  ipcMain.handle('session:updateSportState', (_, patch) => {
+    const session = sessionManager.updateSportState(patch);
+    graphicsEngine.setSportScorebugState(session);
+    return session;
+  });
+  ipcMain.handle('session:applyScoreChange', (_, { side, amount }) => {
+    const outcome = sessionManager.applyScoreChange(side, amount, scoreManager, eventLogger);
+    if (outcome.completed && outcome.session.modeId === 'volleyball') {
+      matchEngine.adjustSetTally(outcome.completed.winner, 1);
+    }
+    graphicsEngine.setSportScorebugState(outcome.session);
+    return outcome;
+  });
+  ipcMain.handle('session:setAthleticsEvent', (_, input) => {
+    const session = sessionManager.setAthleticsEvent(input);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:setAthleticsPodiumVisible', (_, visible) => {
+    const session = sessionManager.setAthleticsPodiumVisible(visible);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:recordAthleticsResult', (_, input) => {
+    const session = sessionManager.recordAthleticsResult(input);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:removeAthleticsResult', (_, resultId) => {
+    const session = sessionManager.removeAthleticsResult(resultId);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:getAthleticsStandings', () => sessionManager.getAthleticsStandings());
+  ipcMain.handle('session:addAthleticsHouse', (_, input) => {
+    const session = sessionManager.addAthleticsHouse(input);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:setAthleticsHouseLogo', (_, { houseId, dataUrl }) => {
+    const session = sessionManager.setAthleticsHouseLogo(houseId, dataUrl);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
 
   // Bind Subsystem Events to Renderer
   obsClient.on('connected', (status) => sendToRenderer('obs:statusChanged', obsClient.getStatus()));
@@ -80,6 +228,7 @@ function registerIpcHandlers({
     matchEngine.setClock(data || {})
   );
   ipcMain.handle('match:setOffenseClock', (_, data) => matchEngine.setOffenseClock(data || {}));
+  ipcMain.handle('match:setOffenseClockEnabled', (_, enabled) => matchEngine.setOffenseClockEnabled(enabled));
   ipcMain.handle('match:startOffenseClock', () => matchEngine.startOffenseClock());
   ipcMain.handle('match:pauseOffenseClock', () => matchEngine.pauseOffenseClock());
   ipcMain.handle('match:toggleOffenseClock', () => matchEngine.toggleOffenseClock());
@@ -117,7 +266,24 @@ function registerIpcHandlers({
   // Operation A — Capture Replay: trigger Source Record's Save Replay Buffer hotkey.
   ipcMain.handle('replay:capture', async (_, options) => await replayEngine.captureReplay(options || {}));
   ipcMain.handle('replay:captureAll', async () => await replayEngine.captureAllReplays());
-  ipcMain.handle('replay:air', async (_, clip) => await replayEngine.airReplay(clip));
+  ipcMain.handle('replay:chooseFile', async () => {
+    const selection = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select a saved replay',
+      properties: ['openFile'],
+      filters: [{
+        name: 'Video files',
+        extensions: ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'ts']
+      }]
+    });
+    if (selection.canceled || selection.filePaths.length === 0) return null;
+    selectedReplayPath = path.resolve(selection.filePaths[0]);
+    return path.basename(selectedReplayPath);
+  });
+  ipcMain.handle('replay:air', async () => {
+    if (!selectedReplayPath) throw new Error('Select a replay video first.');
+    return replayEngine.airReplay(selectedReplayPath);
+  });
+  ipcMain.handle('replay:stop', async () => await replayEngine.stopReplay());
 
   // --- Graphics IPC Handlers ---
   ipcMain.handle('graphics:showLowerThird', (_, data) => graphicsEngine.showLowerThird(data));
@@ -140,6 +306,15 @@ function registerIpcHandlers({
   ipcMain.handle('graphics:triggerTransition', (_, data) => graphicsEngine.triggerTransition(data));
   ipcMain.handle('graphics:getScorebugVisible', () => graphicsEngine.scorebugVisible);
   ipcMain.handle('graphics:setScorebugVisible', (_, visible) => graphicsEngine.setScorebugVisible(visible));
+  ipcMain.handle('graphics:setScorebugExpanded', (_, expanded) =>
+    graphicsEngine.setScorebugExpanded(expanded)
+  );
+  ipcMain.handle('graphics:getScreenCenterScorebugVisible', () =>
+    graphicsEngine.screenCenterScorebugVisible
+  );
+  ipcMain.handle('graphics:setScreenCenterScorebugVisible', (_, visible) =>
+    graphicsEngine.setScreenCenterScorebugVisible(visible)
+  );
   ipcMain.handle('graphics:getRemoteControlInfo', () => graphicsEngine.getRemoteControlInfo());
   ipcMain.handle('graphics:setRemoteControlPassword', (_, password) => graphicsEngine.setRemoteControlPassword(password));
   ipcMain.handle('graphics:setRemoteImmediateScore', (_, enabled) => graphicsEngine.setRemoteImmediateScore(enabled));
@@ -156,7 +331,7 @@ function registerIpcHandlers({
 
   // --- Master Safety / Return to Live ---
   ipcMain.handle('system:emergencyAbort', async () => {
-    console.warn('[BOS-SYSTEM] EMERGENCY RETURN TO LIVE CALLED!');
+    console.warn('[SLC-SYSTEM] EMERGENCY RETURN TO LIVE CALLED!');
     await goalWorkflow.abort();
     graphicsEngine.hideLowerThird();
     await scenesController.switchToLive();

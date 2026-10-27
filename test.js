@@ -4,9 +4,11 @@ const os = require('os');
 const path = require('path');
 const WebSocket = require('ws');
 
-console.log('--- BOS Smoke Test ---');
+console.log('--- SLC Smoke Test ---');
 
 const ConfigManager = require('./electron/config');
+const SessionManager = require('./electron/sessionManager');
+const loadTeamCatalog = require('./electron/teamCatalog');
 const OBSClient = require('./electron/obs/client');
 const ScenesController = require('./electron/obs/scenes');
 const SourcesController = require('./electron/obs/sources');
@@ -27,6 +29,336 @@ const testConfigPath = path.join(os.tmpdir(), `bos-test-config-${Date.now()}.jso
 const cfg = new ConfigManager(testConfigPath);
 cfg.set('graphics.httpPort', 0);
 console.log('✓ Config loaded (temp test config). OBS Host:', cfg.get('obs.host'));
+const teamCatalog = loadTeamCatalog();
+if (teamCatalog.length < 2 || teamCatalog.some(team => !team.logo.startsWith('data:image/png;base64,'))) {
+  throw new Error('Configured teams and bundled logos did not load.');
+}
+console.log('✓ Configured team names and bundled logos load from teams.json.');
+const inactiveTeamConfigPath = path.join(os.tmpdir(), `bos-inactive-team-${Date.now()}.json`);
+const inactiveTeamConfig = JSON.parse(fs.readFileSync(path.join(__dirname, 'teams.json'), 'utf8'));
+inactiveTeamConfig.teams.find(team => team.id === teamCatalog.at(-1).id).active = false;
+fs.writeFileSync(inactiveTeamConfigPath, JSON.stringify(inactiveTeamConfig));
+const activeOnlyCatalog = loadTeamCatalog(inactiveTeamConfigPath);
+fs.unlinkSync(inactiveTeamConfigPath);
+const disabledTeamId = teamCatalog.at(-1).id;
+if (activeOnlyCatalog.length !== teamCatalog.length - 1 ||
+    activeOnlyCatalog.some(team => team.id === disabledTeamId) ||
+    !activeOnlyCatalog.every(team => team.active)) {
+  throw new Error('Inactive teams were not excluded from the global team catalog.');
+}
+console.log('✓ Inactive teams are excluded from all team catalog consumers.');
+
+const testSessionPath = path.join(os.tmpdir(), `slc-test-session-${Date.now()}.json`);
+const sessions = new SessionManager(testSessionPath);
+sessions.create({
+  mode: 'formal-event',
+  competitionName: 'School Awards Evening',
+  venue: 'Main Hall'
+});
+sessions.activate();
+sessions.saveSnapshot({ home: { name: 'A', score: 0 }, away: { name: 'B', score: 0 } }, {
+  matchState: 'PRE_MATCH',
+  clock: { elapsedSeconds: 0, formatted: '00:00' }
+});
+sessions.flush();
+const recoveredSessions = new SessionManager(testSessionPath);
+if (!recoveredSessions.getState().recoverable ||
+    recoveredSessions.getState().activeSession.modeId !== 'formal-event' ||
+    recoveredSessions.getState().activeSession.competition.name !== 'School Awards Evening') {
+  throw new Error('Session recovery did not preserve the formal-event session.');
+}
+let invalidSessionRejected = false;
+try {
+  sessions.create({ mode: 'not-a-mode', competitionName: 'Invalid' });
+} catch {
+  invalidSessionRejected = true;
+}
+if (!invalidSessionRejected) throw new Error('Invalid session mode was accepted.');
+const athleticsTestPath = path.join(os.tmpdir(), `slc-test-athletics-${Date.now()}.json`);
+const athleticsLegacyTestPath = path.join(os.tmpdir(), `slc-test-athletics-legacy-${Date.now()}.json`);
+const shotPutTestPath = path.join(os.tmpdir(), `slc-test-shot-put-${Date.now()}.json`);
+const athleticsSession = new SessionManager(athleticsTestPath);
+athleticsSession.create({
+  mode: 'athletics',
+  competitionName: 'House Sports Day',
+  homeTeam: '',
+  awayTeam: '',
+  athleticsHouses: teamCatalog
+});
+const defaultHouses = athleticsSession.getActiveSession().athletics.houses;
+if (defaultHouses.map(house => house.name).join(',') !== teamCatalog.map(team => team.name).join(',') ||
+    !defaultHouses.every(house => house.logo.startsWith('data:image/png;base64,')) ||
+    athleticsSession.getActiveSession().teams !== null) {
+  throw new Error('Athletics did not initialize its configured houses and logos.');
+}
+const shotPutSession = new SessionManager(shotPutTestPath);
+shotPutSession.create({
+  mode: 'athletics',
+  competitionName: 'Shot Put Test',
+  athleticsHouses: teamCatalog
+});
+shotPutSession.setAthleticsEvent({ name: 'Shot Put Final', category: 'field' });
+if (shotPutSession.getActiveSession().athletics.currentEvent.category !== 'shot-put') {
+  throw new Error('Legacy field event categories were not normalized to Shot Put.');
+}
+shotPutSession.recordAthleticsResult({
+  athleteName: 'A. Thrower',
+  team: teamCatalog[0].name,
+  attempt: 1,
+  distance: 8
+});
+shotPutSession.recordAthleticsResult({
+  athleteName: 'A. Thrower',
+  team: teamCatalog[0].name,
+  attempt: 2,
+  distance: 9.25
+});
+shotPutSession.recordAthleticsResult({
+  athleteName: 'B. Thrower',
+  team: teamCatalog[1].name,
+  attempt: 1,
+  distance: 9
+});
+let shotPutResults = shotPutSession.getActiveSession().athletics.currentEvent.results;
+if (shotPutResults[0].athleteName !== 'A. Thrower' ||
+    shotPutResults[0].bestDistance !== 9.25 ||
+    shotPutResults[0].result !== '9.25 m' ||
+    shotPutResults[0].attempts[1] !== 9.25 ||
+    shotPutResults[1].place !== 2 ||
+    shotPutSession.getAthleticsStandings()[0].points !== 5) {
+  throw new Error('Shot Put attempts did not produce best-mark rankings and house standings.');
+}
+shotPutSession.recordAthleticsResult({
+  athleteName: 'A. Thrower',
+  team: teamCatalog[0].name,
+  attempt: 2,
+  distance: 8.75
+});
+shotPutResults = shotPutSession.getActiveSession().athletics.currentEvent.results;
+if (shotPutResults[0].athleteName !== 'B. Thrower' ||
+    shotPutResults[1].bestDistance !== 8.75 ||
+    shotPutResults[1].attempts[1] !== 8.75) {
+  throw new Error('Correcting a Shot Put attempt did not recalculate the final mark and rank.');
+}
+const shotPutBroadcast = shotPutSession.getAthleticsBroadcastState();
+if (shotPutBroadcast.event.category !== 'shot-put' ||
+    shotPutBroadcast.event.results[1].attempts[1] !== 8.75) {
+  throw new Error('Shot Put attempt data was not included in the live broadcast state.');
+}
+const recoveredShotPut = new SessionManager(shotPutTestPath).getActiveSession();
+if (recoveredShotPut.athletics.currentEvent.results[1].bestDistance !== 8.75) {
+  throw new Error('Shot Put attempt marks and rankings were not persisted for recovery.');
+}
+shotPutSession.removeAthleticsResult(shotPutResults[0].id);
+shotPutResults = shotPutSession.getActiveSession().athletics.currentEvent.results;
+if (shotPutResults.length !== 1 || shotPutResults[0].place !== 1 ||
+    shotPutSession.getAthleticsStandings()[0].points !== 5) {
+  throw new Error('Removing a Shot Put result did not recalculate ranks and house points.');
+}
+const basketballTestPath = path.join(os.tmpdir(), `slc-test-basketball-session-${Date.now()}.json`);
+const basketballSession = new SessionManager(basketballTestPath);
+basketballSession.create({
+  mode: 'basketball',
+  competitionName: 'Basketball Test',
+  homeTeam: teamCatalog[0].name,
+  awayTeam: teamCatalog[1].name,
+  homeTeamBrand: teamCatalog[0],
+  awayTeamBrand: teamCatalog[1]
+});
+if (basketballSession.getActiveSession().sportState.period !== '1st Quarter' ||
+    basketballSession.getActiveSession().teams.home.logo !== teamCatalog[0].logo) {
+  throw new Error('Basketball quarter label or configured team branding was not initialized.');
+}
+let longCompetitionNameRejected = false;
+try {
+  basketballSession.updateCompetitionName('x'.repeat(61));
+} catch {
+  longCompetitionNameRejected = true;
+}
+if (!longCompetitionNameRejected) throw new Error('Competition names over 60 characters were accepted.');
+const volleyballTestPath = path.join(os.tmpdir(), `slc-test-volleyball-session-${Date.now()}.json`);
+const volleyballSession = new SessionManager(volleyballTestPath);
+volleyballSession.create({
+  mode: 'volleyball',
+  competitionName: 'Volleyball Test',
+  homeTeam: teamCatalog[0].name,
+  awayTeam: teamCatalog[1].name,
+  homeTeamBrand: teamCatalog[0],
+  awayTeamBrand: teamCatalog[1]
+});
+volleyballSession.updateSportState({
+  pointsToWin: 5,
+  decidingSetPointsToWin: 7,
+  pointsToWinBy: 3
+});
+const volleyballScore = new ScoreManager(cfg);
+volleyballScore.setScore(5, 4);
+const volleyballCloseScore = volleyballSession.applyScoreChange('home', 1, volleyballScore);
+const volleyballSetWinner = volleyballSession.applyScoreChange('home', 1, volleyballScore);
+if (volleyballCloseScore.completed || volleyballSetWinner.completed?.winner !== 'home' ||
+    volleyballSetWinner.completed.points.home !== 7 ||
+    volleyballSession.getActiveSession().sportState.decidingSetPointsToWin !== 7) {
+  throw new Error('Volleyball did not honor its configured set target and win margin.');
+}
+volleyballSession.updateSportState({ sets: { home: 2, away: 2 } });
+volleyballScore.setScore(7, 6);
+const decidingSetWinner = volleyballSession.applyScoreChange('home', 2, volleyballScore);
+if (decidingSetWinner.completed?.points.home !== 9 || decidingSetWinner.completed.points.away !== 6) {
+  throw new Error('Volleyball did not honor the configured deciding-set target.');
+}
+console.log('✓ Volleyball set targets and win-by margin are configurable.');
+const emptyAthleticsBroadcast = athleticsSession.getAthleticsBroadcastState();
+if (emptyAthleticsBroadcast.active !== true || emptyAthleticsBroadcast.event !== null) {
+  throw new Error('Athletics broadcast state should remain active before an event is selected.');
+}
+console.log('✓ Athletics broadcast stays active before the live event title is set.');
+athleticsSession.setAthleticsHouseLogo(defaultHouses[0].id, 'data:image/png;base64,aA==');
+athleticsSession.addAthleticsHouse({ name: 'Sapphire' });
+let duplicateHouseRejected = false;
+try { athleticsSession.addAthleticsHouse({ name: 'garnet' }); } catch { duplicateHouseRejected = true; }
+if (!duplicateHouseRejected ||
+    athleticsSession.getActiveSession().athletics.houses.length !== defaultHouses.length + 1) {
+  throw new Error('Athletics house validation did not prevent a duplicate house.');
+}
+athleticsSession.addParticipant({ name: 'A. Runner', type: 'athlete', team: 'Garnet', number: 12 });
+athleticsSession.setAthleticsEvent({ name: '200m Level 01 Boys', category: 'track' });
+const athleticsEvent = athleticsSession.getActiveSession().athletics.currentEvent;
+athleticsSession.recordAthleticsResult({
+  athleteName: 'A. Runner',
+  team: 'Garnet',
+  result: '12.4 s',
+  place: 1,
+  points: 5
+});
+athleticsSession.recordAthleticsResult({
+  athleteName: 'B. Runner',
+  team: 'Emerald',
+  result: '12.8 s',
+  place: 2,
+  points: 3
+});
+const athleticsStandings = athleticsSession.getAthleticsStandings();
+if (athleticsStandings[0].team !== 'Garnet' || athleticsStandings[0].points !== 5 ||
+    athleticsStandings[1].medals.silver !== 1 ||
+    athleticsSession.getActiveSession().athletics.currentEvent.results[0].athleteName !== 'A. Runner' ||
+    !athleticsSession.getActiveSession().athletics.houses[0].logo) {
+  throw new Error('Athletics result entry did not produce correct standings.');
+}
+const recoveredAthletics = new SessionManager(athleticsTestPath).getActiveSession();
+if (recoveredAthletics.athletics.houses.length !== defaultHouses.length + 1 ||
+    !recoveredAthletics.athletics.houses[0].logo ||
+    recoveredAthletics.athletics.results.length !== 2 ||
+    recoveredAthletics.athletics.currentEvent.name !== '200m Level 01 Boys') {
+  throw new Error('Athletics houses, logos, and results were not persisted for recovery.');
+}
+const legacyAthletics = athleticsSession.getActiveSession();
+legacyAthletics.athletics.schedule = [legacyAthletics.athletics.currentEvent];
+legacyAthletics.athletics.activeEventId = legacyAthletics.athletics.currentEvent.id;
+delete legacyAthletics.athletics.currentEvent;
+delete legacyAthletics.athletics.podiumVisible;
+fs.writeFileSync(athleticsLegacyTestPath, JSON.stringify({ activeSession: legacyAthletics }));
+const migratedAthletics = new SessionManager(athleticsLegacyTestPath).getActiveSession();
+if (migratedAthletics.athletics.currentEvent.name !== '200m Level 01 Boys' ||
+    migratedAthletics.athletics.currentEvent.category !== 'running' ||
+    migratedAthletics.athletics.currentEvent.results.length !== 2 ||
+    'schedule' in migratedAthletics.athletics) {
+  throw new Error('Legacy Athletics schedules were not migrated to the live event model.');
+}
+console.log('✓ Legacy Athletics schedule migrates to live event state.');
+const athleticsBroadcast = athleticsSession.getAthleticsBroadcastState();
+if (!athleticsBroadcast.active || athleticsBroadcast.event.name !== '200m Level 01 Boys' ||
+    athleticsBroadcast.event.results.length !== 2 || !athleticsBroadcast.houses[0].logo) {
+  throw new Error('Athletics broadcast standings did not include the live event and house logos.');
+}
+const updatedEvent = athleticsSession.setAthleticsEvent({
+  name: 'Baton Relay Level 05 Boys',
+  category: 'relay'
+}).athletics.currentEvent;
+if (updatedEvent.id !== athleticsEvent.id || updatedEvent.results.length !== 2) {
+  throw new Error('The live event title should update dynamically without discarding live standings.');
+}
+athleticsSession.recordAthleticsResult({
+  runnerNames: ['Runner One', 'Runner Two', 'Runner Three', 'Runner Four'],
+  athleteName: 'Runner One → Runner Two → Runner Three → Runner Four',
+  team: 'Garnet',
+  result: '52.8 s',
+  place: 1,
+  points: 5
+});
+const relayBroadcast = athleticsSession.getAthleticsBroadcastState();
+if (relayBroadcast.event.name !== 'Baton Relay Level 05 Boys' ||
+    !relayBroadcast.event.results.some(result =>
+      result.runnerNames.join(' → ') === 'Runner One → Runner Two → Runner Three → Runner Four')) {
+  throw new Error('Relay runner order was not preserved for broadcast.');
+}
+athleticsSession.setAthleticsPodiumVisible(true);
+const podiumBroadcast = athleticsSession.getAthleticsBroadcastState();
+if (!podiumBroadcast.podiumVisible) {
+  throw new Error('Athletics podium visibility was not enabled for broadcast.');
+}
+const relayEntry = athleticsSession.getActiveSession().athletics.currentEvent.results.find(result => result.runnerNames.length);
+athleticsSession.removeAthleticsResult(relayEntry.id);
+if (athleticsSession.getAthleticsBroadcastState().event.results.some(result => result.runnerNames.length)) {
+  throw new Error('Removing a live result did not update the on-air standings.');
+}
+let invalidLogoRejected = false;
+try { athleticsSession.setAthleticsHouseLogo(defaultHouses[1].id, 'https://example.invalid/logo.svg'); } catch { invalidLogoRejected = true; }
+if (!invalidLogoRejected) throw new Error('Unvalidated external house logo was accepted.');
+athleticsSession.create({
+  mode: 'table-tennis',
+  competitionName: 'Singles Final',
+  homeTeam: 'Garnet',
+  awayTeam: 'Emerald',
+  tableTennisFormat: 'singles',
+  tableTennisPlayers: { home: ['Home Player'], away: ['Away Player'] }
+});
+const presetTeams = athleticsSession.getActiveSession().teams;
+if (presetTeams.home.primaryColor !== '#e11d48' ||
+    presetTeams.away.primaryColor !== '#10b981' ||
+    presetTeams.home.secondaryColor !== '#7f1d1d' ||
+    presetTeams.away.secondaryColor !== '#064e3b') {
+  throw new Error('Selected house presets did not retain their broadcast colors.');
+}
+if (athleticsSession.getActiveSession().sportState.tableTennis.players.home[0] !== 'Home Player') {
+  throw new Error('Table tennis player names were not saved to the session.');
+}
+athleticsSession.create({
+  mode: 'table-tennis',
+  competitionName: 'Doubles Final',
+  homeTeam: 'Garnet',
+  awayTeam: 'Emerald',
+  tableTennisFormat: 'doubles',
+  tableTennisPlayers: {
+    home: ['Home One', 'Home Two'],
+    away: ['Away One', 'Away Two']
+  }
+});
+if (athleticsSession.getActiveSession().sportState.tableTennis.players.away.length !== 2) {
+  throw new Error('Table tennis doubles players were not saved to the session.');
+}
+athleticsSession.updateSportState({ pointsToWin: 15 });
+if (athleticsSession.getActiveSession().sportState.pointsToWin !== 15) {
+  throw new Error('Table tennis points-to-win target was not configurable.');
+}
+athleticsSession.updateSportState({ pointsToWin: 11 });
+console.log('✓ Session team selection applies the selected house palettes.');
+const gameConfigPath = path.join(os.tmpdir(), `slc-test-game-config-${Date.now()}.json`);
+const gameConfig = new ConfigManager(gameConfigPath);
+const gameScore = new ScoreManager(gameConfig);
+const gameEvents = new EventLogger();
+gameScore.setScore(10, 10);
+athleticsSession.applyScoreChange('home', 1, gameScore, gameEvents);
+const finalPoint = athleticsSession.applyScoreChange('home', 1, gameScore, gameEvents);
+if (finalPoint.session.sportState.sets.home !== 1 ||
+    finalPoint.score.home.score !== 0 ||
+    !finalPoint.session.sportState.completedGames.length ||
+    gameEvents.getEvents()[0].type !== 'GAME_COMPLETED') {
+  throw new Error('Table tennis win-by-two scoring did not complete and reset the game.');
+}
+const nextGamePoint = athleticsSession.applyScoreChange('home', 1, gameScore, gameEvents);
+if (nextGamePoint.completed !== null || nextGamePoint.score.home.score !== 1) {
+  throw new Error('A point in the next game incorrectly repeated the previous game completion.');
+}
 
 // The live operator config must stay parseable — strictly read-only check.
 try {
@@ -40,6 +372,30 @@ try {
 const score = new ScoreManager(cfg);
 console.log('✓ ScoreManager loaded. Initial:', score.getScore());
 
+const testMatchRestore = new MatchEngine(score, new EventLogger(), cfg);
+testMatchRestore.setClock({ seconds: 73, period: 'Second Half' });
+const matchSnapshot = testMatchRestore.getFullState();
+testMatchRestore.startClock();
+testMatchRestore.setTemporaryState('GOAL');
+const restoredMatch = testMatchRestore.restoreState(matchSnapshot);
+if (restoredMatch.clock.running || restoredMatch.clock.elapsedSeconds !== 73 ||
+    restoredMatch.clock.period !== 'Second Half' || restoredMatch.tempState !== 'NONE') {
+  throw new Error('Match recovery did not restore factual clock state safely.');
+}
+if (testMatchRestore.getOffenseClockState().enabled ||
+    testMatchRestore.startOffenseClock().running) {
+  throw new Error('The offense timer ran while disabled by default.');
+}
+const enabledOffense = testMatchRestore.setOffenseClockEnabled(true);
+const runningOffense = testMatchRestore.startOffenseClock();
+const disabledOffense = testMatchRestore.setOffenseClockEnabled(false);
+if (!enabledOffense.enabled || !runningOffense.running ||
+    disabledOffense.enabled || disabledOffense.running) {
+  throw new Error('Enabling the offense timer did not start it or disabling it did not stop it.');
+}
+testMatchRestore.destroy();
+console.log('✓ Session setup validates mode, recovery, and paused clock restoration.');
+
 const events = new EventLogger();
 const match = new MatchEngine(score, events, cfg);
 console.log('✓ MatchEngine loaded. State:', match.getFullState().matchState);
@@ -52,6 +408,63 @@ console.log('✓ OBS modules loaded.');
 
 const graphics = new GraphicsEngine(cfg, score, match);
 console.log('✓ GraphicsEngine started on port:', graphics.port);
+const volleyballScorebug = graphics.setSportScorebugState(volleyballSession.getActiveSession());
+if (volleyballScorebug?.mode !== 'volleyball' || volleyballScorebug.target !== 7 ||
+    volleyballScorebug.pointsToWinBy !== 3 || volleyballScorebug.homeSets !== 3 ||
+    volleyballScorebug.awaySets !== 2) {
+  throw new Error('Volleyball set state was not synchronized to the scorebug.');
+}
+const tableTennisScorebug = graphics.setSportScorebugState(athleticsSession.getActiveSession());
+if (tableTennisScorebug?.mode !== 'table-tennis' ||
+    tableTennisScorebug.target !== 11 ||
+    tableTennisScorebug.pointsToWinBy !== 2 ||
+    tableTennisScorebug.matchFormat !== 'doubles' ||
+    tableTennisScorebug.homePlayers.join(',') !== 'Home One,Home Two' ||
+    tableTennisScorebug.awayPlayers.join(',') !== 'Away One,Away Two') {
+  throw new Error('Table tennis player names or doubles format were not synchronized to the scorebug.');
+}
+if (tableTennisScorebug.homeSets !== 1 || tableTennisScorebug.awaySets !== 0) {
+  throw new Error('Table tennis set tally was not synchronized to the scorebug.');
+}
+athleticsSession.updateSportState({ pointsToWin: 15 });
+if (graphics.setSportScorebugState(athleticsSession.getActiveSession()).target !== 15) {
+  throw new Error('Table tennis scorebug target did not update when its rules changed.');
+}
+athleticsSession.updateSportState({ pointsToWin: 11 });
+const cricketTestPath = path.join(os.tmpdir(), `slc-test-cricket-session-${Date.now()}.json`);
+const cricketSession = new SessionManager(cricketTestPath);
+cricketSession.create({
+  mode: 'cricket',
+  competitionName: 'Cricket Test',
+  homeTeam: teamCatalog[0].name,
+  awayTeam: teamCatalog[1].name,
+  homeTeamBrand: teamCatalog[0],
+  awayTeamBrand: teamCatalog[1]
+});
+cricketSession.updateSportState({
+  period: '2nd Innings',
+  wickets: { home: 2 },
+  overs: { home: 8 }
+});
+const cricketScorebug = graphics.setSportScorebugState(cricketSession.getActiveSession());
+if (cricketScorebug?.mode !== 'cricket' || cricketScorebug.period !== '2nd Innings' ||
+    cricketScorebug.homeWickets !== 2 || cricketScorebug.homeOvers !== 8) {
+  throw new Error('Cricket innings, wickets, or overs were not synchronized to the scorebug.');
+}
+graphics.setSportScorebugState(null);
+if (graphics.setScorebugExpanded(true) !== true || !graphics.scorebugExpanded ||
+    graphics.setScorebugExpanded(false) !== false || graphics.scorebugExpanded) {
+  throw new Error('Scorebug expand/collapse state did not update.');
+}
+console.log('✓ Scorebug compact/expanded state is controllable.');
+graphics.setAthleticsStandings(podiumBroadcast);
+if (!graphics.athleticsStandings.active ||
+    graphics.athleticsStandings.event.name !== 'Baton Relay Level 05 Boys' ||
+    graphics.athleticsStandings.podiumVisible !== true) {
+  throw new Error('GraphicsEngine did not publish the live Athletics podium state.');
+}
+graphics.setAthleticsStandings({ active: false, event: null, houses: [] });
+console.log('✓ Athletics event standings can replace and clear the scorebug graphic.');
 
 const replay = new ReplayEngine(cfg, obs);
 console.log('✓ ReplayEngine (Source Record trigger) loaded. Replay enabled:', replay.getStatus().enabled);
@@ -65,6 +478,48 @@ const assertReplay = (label, cond) => {
     console.error('✗ Replay:', label);
   }
 };
+
+const replayAiringActions = [];
+const airingEngine = new ReplayEngine(
+  { get: key => ({
+    'replay.enabled': true,
+    'scenes.replayMediaSource': 'Replay Video'
+  })[key] },
+  { isConnected: true },
+  {
+    setMediaSourceFile: async (source, file) => {
+      replayAiringActions.push(['load', source, file]);
+      return true;
+    },
+    playMedia: async source => {
+      replayAiringActions.push(['play', source]);
+      return true;
+    },
+    stopMedia: async source => {
+      replayAiringActions.push(['stop', source]);
+      return true;
+    }
+  },
+  {
+    switchToReplay: async () => {
+      replayAiringActions.push(['scene', 'REPLAY']);
+      return true;
+    },
+    switchToLive: async () => {
+      replayAiringActions.push(['scene', 'LIVE']);
+      return true;
+    }
+  }
+);
+const replayAiringValidation = airingEngine.airReplay('/selected/replay.mp4').then(async aired => {
+  const stopped = await airingEngine.stopReplay();
+  assertReplay('selected replay loads in OBS, airs, stops, and returns LIVE',
+    aired.ok && stopped.ok && replayAiringActions.map(action => action[0]).join(',') === 'load,scene,play,stop,scene');
+}).catch(error => {
+  replayFailures++;
+  console.error('✗ Replay airing validation failed:', error.message);
+  throw error;
+});
 
 const cameraRequests = [];
 const cameraReplayConfigValues = {
@@ -585,6 +1040,13 @@ const check = () => {
   cameraReplay.destroy();
   match.destroy();
   try { fs.unlinkSync(testConfigPath); } catch (e) { /* temp file may not exist */ }
+  try { fs.unlinkSync(testSessionPath); } catch (e) { /* temp file may not exist */ }
+  try { fs.unlinkSync(athleticsTestPath); } catch (e) { /* temp file may not exist */ }
+  try { fs.unlinkSync(athleticsLegacyTestPath); } catch (e) { /* temp file may not exist */ }
+  try { fs.unlinkSync(basketballTestPath); } catch (e) { /* temp file may not exist */ }
+  try { fs.unlinkSync(volleyballTestPath); } catch (e) { /* temp file may not exist */ }
+  try { fs.unlinkSync(cricketTestPath); } catch (e) { /* temp file may not exist */ }
+  try { fs.unlinkSync(gameConfigPath); } catch (e) { /* temp file may not exist */ }
   if (clockFailures > 0) {
     console.error(`${clockFailures} clock assertion(s) FAILED`);
     process.exit(1);
@@ -604,4 +1066,4 @@ const check = () => {
   console.log('All backend modules loaded and validated successfully!');
   process.exit(0);
 };
-setTimeout(() => Promise.all([workflowValidation, remoteValidation]).finally(check), 500);
+setTimeout(() => Promise.all([workflowValidation, remoteValidation, replayAiringValidation]).finally(check), 500);

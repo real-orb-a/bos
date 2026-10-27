@@ -2,46 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>BOS Score Bug</title>
+  <title>SLC Scorebug</title>
   <link rel="stylesheet" href="score.css">
 </head>
 <body>
   <div id="score-bug" class="score-bug">
-    <div class="team team-home" id="team-home">
-      <div class="team-color-bar" id="home-bar"></div>
-      <div class="team-meta">
-        <span class="team-short" id="home-short">GAR</span>
-        <span class="team-name" id="home-name">GARNET</span>
+    <div class="match-name" id="match-name"></div>
+    <div class="offense-banner hidden" id="offense-banner">
+      <div class="offense-display" id="offense-display">
+        <span>OFFENSE</span><strong id="offense-clock-display">00</strong>
       </div>
-      <div class="team-score-wrapper">
-        <span class="team-score" id="home-score">0</span>
-      </div>
+      <div class="period-display" id="period-banner">1ST</div>
     </div>
-
-    <div class="match-info">
-      <div class="clock-display" id="clock-display">00:00</div>
-      <div class="period-display" id="period-display">1ST</div>
-      <div class="sets-display" id="sets-display">SETS 0–0</div>
-      <div class="offense-display hidden" id="offense-display">
-        <span>OFFENSE</span>
-        <strong id="offense-clock-display">00</strong>
+    <div class="score-row">
+      <div class="team team-home" id="team-home">
+        <img class="team-logo has-logo" id="home-logo" src="assets/houses/garnet.png" alt="Garnet logo">
+        <div class="team-meta">
+          <span class="team-short" id="home-short">GAR</span>
+          <span class="team-name" id="home-name">GARNET</span>
+          <span class="team-tennis-team-name hidden" id="home-tennis-team">GARNET</span>
+        </div>
+        <div class="team-score-wrapper"><span class="team-score" id="home-score">0</span></div>
       </div>
-      <!-- Additional-time overlay: appears below the clock once the set time is done -->
-      <div class="stoppage-display hidden" id="stoppage-display">00:00</div>
-    </div>
-
-    <div class="team team-away" id="team-away">
-      <div class="team-score-wrapper">
-        <span class="team-score" id="away-score">0</span>
+      <div class="match-info">
+        <div class="clock-display" id="clock-display">00:00</div>
+        <div class="period-display" id="period-display">1ST</div>
+        <div class="volleyball-points-display hidden" id="volleyball-points-display">0 - 0</div>
+        <div class="sets-display" id="sets-display">
+          <span class="sets-value" id="sets-value">0–0</span>
+          <span class="sets-label" id="sets-label">SETS</span>
+        </div>
+        <div class="cricket-display hidden" id="cricket-display">
+          <strong id="cricket-innings-display">1ST INNINGS</strong>
+          <span id="cricket-stats-display">W 0-0 · O 0-0</span>
+        </div>
+        <div class="stoppage-display hidden" id="stoppage-display">00:00</div>
       </div>
-      <div class="team-meta">
-        <span class="team-short" id="away-short">TOP</span>
-        <span class="team-name" id="away-name">TOPAZ</span>
+      <div class="team team-away" id="team-away">
+        <div class="team-score-wrapper"><span class="team-score" id="away-score">0</span></div>
+        <div class="team-meta">
+          <span class="team-short" id="away-short">TOP</span>
+          <span class="team-name" id="away-name">TOPAZ</span>
+          <span class="team-tennis-team-name hidden" id="away-tennis-team">TOPAZ</span>
+        </div>
+        <img class="team-logo has-logo" id="away-logo" src="assets/houses/topaz.png" alt="Topaz logo">
       </div>
-      <div class="team-color-bar" id="away-bar"></div>
     </div>
   </div>
-
+  <section id="athletics-standings" class="athletics-standings hidden" aria-live="polite">
+    <header>
+      <span id="athletics-competition"></span>
+      <strong id="athletics-event-title"></strong>
+    </header>
+    <div id="athletics-result-list"></div>
+  </section>
+  <section id="athletics-podium" class="athletics-podium hidden" aria-live="polite">
+    <header>
+      <span id="athletics-podium-competition"></span>
+      <strong id="athletics-podium-event"></strong>
+      <b>FINAL PODIUM</b>
+    </header>
+    <div id="athletics-podium-places"></div>
+  </section>
   <script src="score.js"></script>
 </body>
 </html>

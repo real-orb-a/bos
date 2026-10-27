@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     },
     Basketball: {
       description: 'Basketball match control',
-      available: 'Independent match setup, scorekeeping, game and shot clocks, periods, fouls, timeouts, and on-screen announcements are available.',
+      available: 'Independent match setup, scorekeeping, a configurable game clock, an offense timer, editable periods, and on-screen announcements are available.',
       planned: 'The venue audio PA and official statistics are not controlled by BOS.'
     }
   };

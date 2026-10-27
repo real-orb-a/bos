@@ -248,5 +248,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  console.log('[BOS] App initialized and hotkeys registered.');
+  console.log('[SLC] App initialized and hotkeys registered.');
 });

@@ -9,6 +9,7 @@ window.MatchModule = (function() {
   const btnSubAway = document.getElementById('btn-sub-away');
   const btnResetScore = document.getElementById('btn-reset-score');
   const btnToggleScorebug = document.getElementById('btn-toggle-scorebug');
+  const btnToggleScreenCenterScorebug = document.getElementById('btn-toggle-screen-center-scorebug');
   const displayHomeScore = document.getElementById('display-home-score');
   const displayAwayScore = document.getElementById('display-away-score');
   const cardHomeName = document.getElementById('card-home-name');
@@ -113,9 +114,22 @@ window.MatchModule = (function() {
     });
 
     btnToggleScorebug.addEventListener('click', async () => {
+      // Lock normal score bug while center score bug is visible.
+      const centerVisible =
+        btnToggleScreenCenterScorebug.getAttribute('aria-pressed') === 'true';
+      if (centerVisible) return;
       const currentlyVisible = btnToggleScorebug.getAttribute('aria-pressed') === 'true';
       const visible = await window.bosAPI.graphics.setScorebugVisible(!currentlyVisible);
       updateScorebugButton(visible);
+    });
+
+    btnToggleScreenCenterScorebug.addEventListener('click', async () => {
+      const currentlyVisible =
+        btnToggleScreenCenterScorebug.getAttribute('aria-pressed') === 'true';
+      const visible = await window.bosAPI.graphics.setScreenCenterScorebugVisible(
+        !currentlyVisible
+      );
+      updateScreenCenterScorebugButton(visible);
     });
 
     // Match State
@@ -351,11 +365,20 @@ window.MatchModule = (function() {
 
   async function loadScorebugVisibility() {
     try {
+      const centerVisible = await window.bosAPI.graphics.getScreenCenterScorebugVisible();
+      updateScreenCenterScorebugButton(centerVisible);
       const visible = await window.bosAPI.graphics.getScorebugVisible();
       updateScorebugButton(visible);
     } catch (err) {
       console.error('Error loading scorebug visibility:', err);
     }
+  }
+
+  function updateScreenCenterScorebugButton(visible) {
+    btnToggleScreenCenterScorebug.setAttribute('aria-pressed', String(!!visible));
+    btnToggleScreenCenterScorebug.textContent = visible
+      ? 'SCREEN CENTER SCOREBUG ON'
+      : 'SCREEN CENTER SCOREBUG OFF';
   }
 
   async function loadRemoteControlInfo() {
@@ -436,8 +459,23 @@ window.MatchModule = (function() {
   }
 
   function updateScorebugButton(visible) {
+    const centerVisible =
+      btnToggleScreenCenterScorebug.getAttribute('aria-pressed') === 'true';
     btnToggleScorebug.setAttribute('aria-pressed', String(!!visible));
+    btnToggleScorebug.disabled = centerVisible;
     btnToggleScorebug.textContent = visible ? 'FADE SCORE BUG OUT' : 'FADE SCORE BUG IN';
+    if (centerVisible) {
+      btnToggleScorebug.classList.add('locked');
+    } else {
+      btnToggleScorebug.classList.remove('locked');
+    }
+  }
+
+  function updateScreenCenterScorebugButton(visible) {
+    btnToggleScreenCenterScorebug.setAttribute('aria-pressed', String(!!visible));
+    btnToggleScreenCenterScorebug.textContent = visible
+      ? 'FADE CENTER SCOREBUG OUT'
+      : 'FADE CENTER SCOREBUG IN';
   }
 
   function listenIpc() {
@@ -580,17 +618,23 @@ window.MatchModule = (function() {
 
   function updateSportControls(mode) {
     const basketballMode = mode === 'countdown';
+    const activeMode = document.body.dataset.activeMode;
     offenseTimerControl.hidden = !basketballMode;
     offenseClockHeader.hidden = !basketballMode;
-    volleyballSetsControl.hidden = basketballMode;
-    btnResetScore.textContent = basketballMode ? 'RESET SCORE' : 'RESET SCORE + SETS';
+    volleyballSetsControl.hidden = activeMode
+      ? activeMode !== 'volleyball'
+      : basketballMode;
+    btnResetScore.textContent = activeMode
+      ? activeMode === 'volleyball' ? 'RESET SCORE + SETS' : 'RESET SCORE'
+      : basketballMode ? 'RESET SCORE' : 'RESET SCORE + SETS';
   }
 
   function updateOffenseTimerUI(offenseState) {
     if (!offenseState) return;
-    const offenseActive = !!offenseState.active || Number(offenseState.limitSeconds) > 0;
+    const offenseActive = offenseState.enabled === true && Number(offenseState.limitSeconds) > 0;
     const basketballMode = selectTimerMode.value === 'countdown';
     updateSportControls(selectTimerMode.value);
+    offenseClockHeader.hidden = !basketballMode || offenseState.enabled !== true;
     btnOffenseToggle.disabled = !offenseActive;
     btnOffenseReset.disabled = !offenseActive;
     btnHeaderOffenseToggle.disabled = !offenseActive;

@@ -1,0 +1,40 @@
+{
+  "teams": [
+    {
+      "id": "garnet",
+      "name": "Garnet",
+      "active": true,
+      "shortName": "GAR",
+      "color": "#e11d48",
+      "secondaryColor": "#7f1d1d",
+      "logo": "graphics/score/assets/houses/garnet.png"
+    },
+    {
+      "id": "emerald",
+      "name": "Emerald",
+      "active": true,
+      "shortName": "EME",
+      "color": "#10b981",
+      "secondaryColor": "#064e3b",
+      "logo": "graphics/score/assets/houses/emerald.png"
+    },
+    {
+      "id": "topaz",
+      "name": "Topaz",
+      "active": true,
+      "shortName": "TOP",
+      "color": "#eab308",
+      "secondaryColor": "#713f12",
+      "logo": "graphics/score/assets/houses/topaz.png"
+    },
+    {
+      "id": "sslsd",
+      "name": "Stafford Sri Lankan School Doha",
+      "active": false,
+      "shortName": "SSLSD",
+      "color": "#c6ab65",
+      "secondaryColor": "#e1e546",
+      "logo": "graphics/score/assets/schools/sslsd.png"
+    }
+  ]
+}
