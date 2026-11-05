@@ -142,7 +142,7 @@ scoring, a configurable game-clock start, and an independently controlled offens
 the offense timer is hidden from the scorebug until enabled in the basketball controls;
 Cricket includes runs, wickets, and overs;
 Volleyball, Table Tennis, and Badminton track points, sets/games, and win-by-two results.
-Table Tennis setup supports singles (1v1) and doubles (2v2), with player names shown on the scorebug.
+Table Tennis setup selects two different active houses, then assigns singles (1v1) or doubles (2v2) players to each house. House identities and player names carry into the match and scorebug.
 Football keeps match state, the clock, added time, goal controls, score correction, and its
 event log together in the session control panel, with on-screen messages in the adjacent panel.
 Athletics uses a dedicated event-control screen rather than a match scoreboard. It starts
@@ -183,26 +183,24 @@ six-digit hex `color` and `secondaryColor`, and an application-root-relative PNG
   ]
 }
 ```
-Operators set one live event label (for example, “200m Level 01 Boys”) and can edit it at any
-time; there is no event schedule or results-publishing step. Running and Baton Relay entries
-immediately update the live leaderboard and can be removed to correct a placing. Shot Put
-records six turns per athlete, displays each distance in an attempts table, and ranks athletes
-by their best valid distance. Baton Relay runner handoffs animate on the broadcast graphic.
-All three event types contribute to event and house standings; points are omitted from the
-event graphic. The operator can switch the on-air graphic from live standings to a podium
-with first-, second-, and third-place names over their house logos. Overall house points and
-medals remain in the operator standings. Athletics uses a standings-first operator layout
-with the event clock and scrollable controls in the main area; full-size Notices and Replay
-panels stay anchored in a separate right-side rail and scroll internally. Sports session setup
-selects teams from `teams.json` and applies each entry's logo and colors to the scoreboard and
-broadcast graphics.
+Houses are your active teams from `teams.json` — each entry's name, color, short name, and
+logo carry into the Athletics session automatically.
+
+Before a meet, operators build the event schedule in session setup:
+1. **Add events one at a time** — enter an event name (e.g. “100m Sprint Boys U12”), choose a type (Running, Shot Put, or Baton Relay), and click **ADD EVENT**.
+2. **Assign athletes** — clicking **ADD EVENT** opens a modal showing every active house. For **Running**, enter one or more runners per house; each competes individually. For **Shot Put**, add one or more athletes per house — each athlete competes separately and gets their own result entry. For **Baton Relay**, add runners in running order (baton hand-off order) with the **Add runner** button; each participating house needs at least 2 runners.
+3. Events stack top to bottom in the setup list and can be removed before creating the session.
+
+During the meet, select a scheduled event to load its saved athlete roster into result entry. The Athletics dashboard shows live event standings with medal positions (1st/2nd/3rd), a championship points table, and a Shot Put attempts grid with per-turn distances and foul markers. All three event types contribute to event and house standings; points are omitted from the event graphic. The operator can switch the on-air graphic from live standings to a podium with first-, second-, and third-place names over their house logos. Overall house points and medals remain in the operator standings. Athletics uses a standings-first operator layout with the event clock and scrollable controls in the main area; full-size Notices and Replay panels stay anchored in a separate right-side rail and scroll internally.
 The broadcast event standings use a compact, scorebug-sized leader card and expand smoothly
 to the full results list with **EXPAND STANDINGS**.
 Formal Event mode provides participant/speaker records
 and programme lower-third cues without match controls or the scorebug.
 
-Session metadata and recovery snapshots are stored as `slc-session.json` under Electron's
-user-data directory. Legacy `bos.json` configuration remains in place so
+Each session is saved as `<session-id>.json` in a `sessions/` folder under Electron's
+user-data directory. The file is updated as the session changes and retained after the session
+ends. `slc-session.json` remains as the active-session recovery record and for migration from
+older versions; explicitly discarding a session removes its session file. Legacy `bos.json` configuration remains in place so
 existing OBS, team, graphics, and replay settings are not discarded during the migration.
 
 ### 3. Add Browser Sources to OBS

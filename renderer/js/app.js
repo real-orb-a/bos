@@ -1,5 +1,69 @@
 // Master App Coordinator Module
 document.addEventListener('DOMContentLoaded', async () => {
+  const graphicsPortBlocker = document.getElementById('graphics-port-blocker');
+  const graphicsPortForm = document.getElementById('graphics-port-form');
+  const graphicsPortInput = document.getElementById('graphics-port-input');
+  const graphicsPortError = document.getElementById('graphics-port-error');
+  const graphicsPortSubmit = document.getElementById('graphics-port-submit');
+  const graphicsPortTitle = document.getElementById('graphics-port-title');
+  const graphicsPortDescription = graphicsPortBlocker.querySelector('p');
+  const graphicsPortAlert = graphicsPortBlocker.querySelector('.graphics-port-alert');
+  const graphicsPortLabel = graphicsPortForm.querySelector('label');
+
+  function updateGraphicsServerStatus(status) {
+    if (!status) return;
+    const blocked = status.state !== 'running';
+    graphicsPortBlocker.classList.toggle('hidden', !blocked);
+    if (!blocked) {
+      graphicsPortError.textContent = '';
+      return;
+    }
+    if (status.state === 'starting') {
+      graphicsPortAlert.textContent = 'PLEASE WAIT · GRAPHICS SERVER';
+      graphicsPortTitle.textContent = 'Starting the graphics server';
+      graphicsPortDescription.textContent = 'The app will be ready as soon as the graphics server is online.';
+      graphicsPortLabel.classList.add('hidden');
+      graphicsPortInput.classList.add('hidden');
+      graphicsPortSubmit.classList.add('hidden');
+      graphicsPortError.textContent = '';
+      return;
+    }
+    graphicsPortAlert.textContent = 'ACTION REQUIRED · GRAPHICS SERVER';
+    graphicsPortTitle.textContent = status.state === 'port-conflict'
+      ? 'The graphics port is unavailable'
+      : 'The graphics server could not start';
+    graphicsPortDescription.textContent = 'Choose a free port and reconnect. This is critical and must be resolved immediately before any other action can be taken.';
+    graphicsPortLabel.classList.remove('hidden');
+    graphicsPortInput.classList.remove('hidden');
+    graphicsPortSubmit.classList.remove('hidden');
+    graphicsPortInput.disabled = false;
+    graphicsPortSubmit.disabled = false;
+    if (!graphicsPortInput.value || Number(graphicsPortInput.value) === Number(status.port)) {
+      graphicsPortInput.value = Number(status.port) < 65535 ? Number(status.port) + 1 : 8088;
+    }
+    graphicsPortError.textContent = status.error || '';
+  }
+
+  graphicsPortForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    graphicsPortInput.disabled = true;
+    graphicsPortSubmit.disabled = true;
+    graphicsPortError.textContent = 'Checking port…';
+    try {
+      const status = await window.bosAPI.graphics.setServerPort(Number(graphicsPortInput.value));
+      updateGraphicsServerStatus(status);
+      if (status.state !== 'running') graphicsPortError.textContent = status.error || 'That port could not be opened. Try another port.';
+    } catch (error) {
+      graphicsPortInput.disabled = false;
+      graphicsPortSubmit.disabled = false;
+      graphicsPortError.textContent = error.message || 'Unable to start the graphics server.';
+    }
+  });
+  window.bosAPI.graphics.onServerStatusChanged(updateGraphicsServerStatus);
+  window.bosAPI.graphics.getServerStatus().then(updateGraphicsServerStatus).catch(error => {
+    updateGraphicsServerStatus({ state: 'error', port: 8088, error: error.message });
+  });
+
   const obsStatusIndicator = document.getElementById('obs-status-indicator');
   const obsLabel = document.getElementById('obs-label');
   const obsPing = document.getElementById('obs-ping');
@@ -175,7 +239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentSceneName.textContent = status.currentScene;
       }
     } else if (status.connecting) {
-      obsStatusIndicator.className = 'obs-status-indicator';
+      obsStatusIndicator.className = 'obs-status-indicator connecting';
       obsLabel.textContent = 'OBS CONNECTING...';
     } else {
       obsStatusIndicator.className = 'obs-status-indicator disconnected';

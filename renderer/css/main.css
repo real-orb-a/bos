@@ -310,6 +310,11 @@ body {
   font-weight: 700;
 }
 
+.obs-status-indicator.connecting {
+  border-color: rgba(250, 204, 21, .42);
+  color: #facc15;
+}
+
 .obs-ping {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;

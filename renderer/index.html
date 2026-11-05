@@ -67,43 +67,120 @@
             </label>
           </div>
           <div class="slc-team-setup">
-            <label id="slc-home-team-label">HOME TEAM
-              <span class="slc-house-choice">
-                <span class="slc-house-color" id="slc-home-team-color" aria-hidden="true"></span>
-                <img class="slc-house-logo-preview" id="slc-home-team-logo" alt="">
-                <select id="slc-home-team" required>
-                </select>
-              </span>
-            </label>
-            <label id="slc-away-team-label">AWAY TEAM
-              <span class="slc-house-choice">
-                <span class="slc-house-color" id="slc-away-team-color" aria-hidden="true"></span>
-                <img class="slc-house-logo-preview" id="slc-away-team-logo" alt="">
-                <select id="slc-away-team" required>
-                </select>
-              </span>
-            </label>
-          </div>
-          <p class="slc-launch-copy hidden" id="slc-team-catalog-hint"></p>
-          <section class="table-tennis-setup hidden" id="slc-table-tennis-setup" aria-label="Table tennis players">
-            <label for="slc-table-tennis-format">MATCH FORMAT
-              <select id="slc-table-tennis-format">
-                <option value="singles">1v1 · Singles</option>
-                <option value="doubles">2v2 · Doubles</option>
-              </select>
-            </label>
-            <div class="table-tennis-player-fields">
-              <label>HOME PLAYERS
-                <input id="slc-table-tennis-home-player-1" maxlength="32" placeholder="Player 1" required>
-                <input class="hidden" id="slc-table-tennis-home-player-2" maxlength="32" placeholder="Player 2">
+            <div class="slc-participant-card hidden" id="slc-participant-home">
+              <div class="slc-participant-heading"><span id="slc-home-team-label">HOME HOUSE</span><b>HOME</b></div>
+              <label class="slc-house-picker">CHOOSE HOUSE
+                <select id="slc-home-house-select" required><option value="">Choose a house…</option></select>
               </label>
-              <label>AWAY PLAYERS
-                <input id="slc-table-tennis-away-player-1" maxlength="32" placeholder="Player 1" required>
-                <input class="hidden" id="slc-table-tennis-away-player-2" maxlength="32" placeholder="Player 2">
+              <div class="slc-house-identity-preview">
+                <span class="slc-house-color" id="slc-home-color-mark" aria-hidden="true"></span>
+                <img class="slc-house-logo-preview" id="slc-home-logo-preview" alt="">
+                <strong id="slc-home-selected-name">Choose a house</strong>
+              </div>
+            </div>
+            <div class="slc-participant-card" id="slc-participant-away">
+              <div class="slc-participant-heading"><span id="slc-away-team-label">AWAY HOUSE</span><b>AWAY</b></div>
+              <label class="slc-house-picker">CHOOSE HOUSE
+                <select id="slc-away-house-select" required><option value="">Choose a house…</option></select>
+              </label>
+              <div class="slc-house-identity-preview">
+                <span class="slc-house-color" id="slc-away-color-mark" aria-hidden="true"></span>
+                <img class="slc-house-logo-preview" id="slc-away-logo-preview" alt="">
+                <strong id="slc-away-selected-name">Choose a house</strong>
+              </div>
+            </div>
+          </div>
+          <div class="slc-participant-hint hidden" id="slc-participant-hint"></div>
+          <section class="table-tennis-setup hidden" id="slc-table-tennis-setup" aria-label="Racket sport players">
+            <div class="table-tennis-setup-heading">
+              <div><span class="section-label">HOUSE MATCHUP</span><h2 id="slc-racket-lineup-title">TABLE TENNIS LINEUP</h2></div>
+              <label for="slc-table-tennis-format">MATCH FORMAT
+                <select id="slc-table-tennis-format">
+                  <option value="singles">Singles · 1 player each</option>
+                  <option value="doubles">Doubles · 2 players each</option>
+                </select>
+              </label>
+            </div>
+            <p class="table-tennis-setup-copy" id="slc-racket-lineup-copy">Enter each player’s name and their own short broadcast code (up to 3 characters).</p>
+            <div class="table-tennis-house-matchup">
+              <label class="table-tennis-house-card" for="slc-table-tennis-home-house">
+                <span class="table-tennis-house-side">HOME HOUSE</span>
+                <span class="table-tennis-house-identity"><span class="table-tennis-house-color" id="slc-table-tennis-home-color"></span><img id="slc-table-tennis-home-logo" alt=""><strong id="slc-table-tennis-home-name">Choose a house</strong></span>
+                <select id="slc-table-tennis-home-house" required></select>
+              </label>
+              <span class="table-tennis-versus">VS</span>
+              <label class="table-tennis-house-card" for="slc-table-tennis-away-house">
+                <span class="table-tennis-house-side">AWAY HOUSE</span>
+                <span class="table-tennis-house-identity"><span class="table-tennis-house-color" id="slc-table-tennis-away-color"></span><img id="slc-table-tennis-away-logo" alt=""><strong id="slc-table-tennis-away-name">Choose a house</strong></span>
+                <select id="slc-table-tennis-away-house" required></select>
+              </label>
+            </div>
+            <div class="table-tennis-player-fields">
+              <label><span id="slc-table-tennis-home-player-label">HOME PLAYERS</span>
+                <span class="racket-player-entry"><input id="slc-table-tennis-home-player-1" maxlength="32" placeholder="Player 1 name" required><input class="racket-player-shortcode" id="slc-table-tennis-home-player-1-short" maxlength="3" pattern="[A-Za-z0-9]{1,3}" placeholder="CODE" aria-label="Home player 1 shortcode" title="Player shortcode · up to 3 characters" required></span>
+                <span class="racket-player-entry hidden" id="slc-table-tennis-home-player-2-row"><input id="slc-table-tennis-home-player-2" maxlength="32" placeholder="Player 2 name"><input class="racket-player-shortcode" id="slc-table-tennis-home-player-2-short" maxlength="3" pattern="[A-Za-z0-9]{1,3}" placeholder="CODE" aria-label="Home player 2 shortcode" title="Player shortcode · up to 3 characters"></span>
+              </label>
+              <label><span id="slc-table-tennis-away-player-label">AWAY PLAYERS</span>
+                <span class="racket-player-entry"><input id="slc-table-tennis-away-player-1" maxlength="32" placeholder="Player 1 name" required><input class="racket-player-shortcode" id="slc-table-tennis-away-player-1-short" maxlength="3" pattern="[A-Za-z0-9]{1,3}" placeholder="CODE" aria-label="Away player 1 shortcode" title="Player shortcode · up to 3 characters" required></span>
+                <span class="racket-player-entry hidden" id="slc-table-tennis-away-player-2-row"><input id="slc-table-tennis-away-player-2" maxlength="32" placeholder="Player 2 name"><input class="racket-player-shortcode" id="slc-table-tennis-away-player-2-short" maxlength="3" pattern="[A-Za-z0-9]{1,3}" placeholder="CODE" aria-label="Away player 2 shortcode" title="Player shortcode · up to 3 characters"></span>
               </label>
             </div>
           </section>
+          <section class="athletics-setup hidden" id="slc-athletics-setup" aria-label="Athletics events & houses">
+            <h2>ATHLETICS MEET SETUP</h2>
+            <p class="slc-launch-copy">Houses are your active teams from Teams &amp; Branding. Add events one at a time — each event opens a modal to assign athletes from every house.</p>
+            
+            <!-- Add event (above the list) -->
+            <div class="athletics-add-event">
+              <label>EVENT NAME
+                <input id="athletics-event-name" maxlength="100" placeholder="e.g. 100m Sprint Boys U12">
+              </label>
+              <label>EVENT TYPE
+                <select id="athletics-event-type" required>
+                  <option value="running">Running</option>
+                  <option value="shot-put">Shot Put</option>
+                  <option value="relay">Baton Relay</option>
+                </select>
+              </label>
+              <button type="button" class="slc-primary-button" id="athletics-add-event-btn">ADD EVENT</button>
+            </div>
+            
+            <!-- Events list (top to bottom) -->
+            <div class="athletics-events-list">
+              <div class="athletics-events-header">
+                <span class="col-event">EVENT</span>
+                <span class="col-type">TYPE</span>
+                <span class="col-athletes">ATHLETES</span>
+                <span class="col-action">ACTION</span>
+              </div>
+              <div id="athletics-events-items"></div>
+            </div>
+          </section>
           <p class="slc-form-error" id="slc-form-error" role="alert"></p>
+          
+          <!-- Event Athlete Assignment Modal -->
+          <div class="modal-backdrop hidden" id="athletics-event-modal" aria-modal="true">
+            <div class="modal-dialog modal-wide">
+              <div class="modal-header">
+                <h2 id="athletics-event-modal-title">ADD ATHLETES TO EVENT</h2>
+                <span id="athletics-event-modal-category" class="modal-category-badge">RUNNING</span>
+                <button class="modal-close-btn" id="athletics-event-modal-close">✕</button>
+              </div>
+              <div class="modal-content">
+                <div id="athletics-event-modal-info" class="athletics-modal-info"></div>
+                <label class="athletics-result-required-option" id="athletics-result-required-wrap">
+                  <input id="athletics-result-required" type="checkbox" checked>
+                  <span><strong>RESULT / TIME REQUIRED</strong><small>Turn this off to list assigned runners immediately. You can drag them into race order without entering times or places.</small></span>
+                </label>
+                <div id="athletics-event-modal-houses"></div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="slc-secondary-button" id="athletics-event-modal-cancel">CANCEL</button>
+                <button type="button" class="slc-primary-button" id="athletics-event-modal-save">SAVE EVENT</button>
+              </div>
+            </div>
+          </div>
+          
           <button class="slc-primary-button" type="submit" id="slc-create-session">CREATE SESSION</button>
         </form>
       </section>
@@ -354,13 +431,20 @@
           </div>
         </div>
 
-        <!-- Reset Score / Quick Sync -->
-        <div class="card-footer-actions">
-          <button class="action-btn-secondary" id="btn-reset-score">RESET SCORE + SETS</button>
-          <div id="football-scorebug-toggle-anchor"></div>
+        <!-- Reset and scorebug controls stay together in a predictable stack. -->
+        <div id="scorebug-controls-anchor"></div>
+        <div class="scorebug-control-stack" id="scorebug-session-controls">
+          <div class="scorebug-control-row">
+            <button class="action-btn-secondary scorebug-reset-btn" id="btn-reset-score">RESET SCORE</button>
+          </div>
+          <div class="scorebug-control-row">
+            <select class="styled-select session-scorebug-toggle hidden" id="session-scorebug-toggle" aria-label="Scorebug display mode"></select>
+            <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-scorebug" type="button" aria-pressed="true">FADE SCOREBUG OUT</button>
+          </div>
+          <div class="scorebug-control-row">
+            <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-screen-center-scorebug" type="button" aria-pressed="false">SHOW CENTER SCOREBUG</button>
+          </div>
         </div>
-        <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-scorebug" type="button" aria-pressed="true">FADE SCORE BUG OUT</button>
-        <button class="action-btn-secondary scorebug-toggle-btn" id="btn-toggle-screen-center-scorebug" type="button" aria-pressed="false">SCREEN CENTER SCOREBUG OFF</button>
       </div>
 
       <!-- Match Events Stream (Section 19) -->
@@ -395,20 +479,42 @@
         </div>
 
         <!-- Custom Message Inputs -->
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label>NOTICE TYPE</label>
+            <select id="select-notice-type" class="styled-select">
+              <option value="new">NEW NOTICE · BODY ONLY</option>
+              <option value="old">OLD NOTICE · TITLE + DETAILS</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label>SCREEN POSITION</label>
+            <select id="select-message-zone" class="styled-select">
+              <option value="bottom">BOTTOM MESSAGE</option>
+              <option value="top">TOP MESSAGE</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" id="new-notice-field">
+          <label>NOTICE BODY</label>
+          <textarea id="input-notice-body" class="styled-input notice-body-input" maxlength="2400" rows="4" placeholder="Type the notice shown on screen…"></textarea>
+        </div>
+        <div id="old-notice-fields">
         <div class="form-group">
           <label>TITLE</label>
-          <input type="text" id="input-lt-title" class="styled-input" placeholder="e.g. UNDER REVIEW" value="UNDER REVIEW">
+          <input type="text" id="input-lt-title" class="styled-input" maxlength="140" placeholder="e.g. UNDER REVIEW" value="UNDER REVIEW">
         </div>
 
         <div class="form-row">
           <div class="form-group flex-1">
             <label>SUBTITLE</label>
-            <input type="text" id="input-lt-subtitle" class="styled-input" placeholder="e.g. DECISION PENDING" value="DECISION PENDING">
+            <input type="text" id="input-lt-subtitle" class="styled-input" maxlength="400" placeholder="e.g. DECISION PENDING" value="DECISION PENDING">
           </div>
           <div class="form-group flex-1">
             <label>HIGHLIGHT (OPTIONAL)</label>
             <input type="text" id="input-lt-value" class="styled-input" placeholder="e.g. +2ND, LIVE" value="">
           </div>
+        </div>
         </div>
 
         <div class="form-group">
@@ -472,18 +578,19 @@
           <div class="replay-request-detail" id="replay-request-detail">No replay save requested yet.</div>
         </div>
 
-        <div class="button-row">
+        <div class="replay-buffer-actions">
           <button class="primary-action-btn replay-btn" id="btn-save-replay" title="Hotkey: R">
-            <span>● SAVE ALL REPLAYS</span>
+            <span>● SAVE REPLAY BUFFER</span>
             <span class="hotkey-pill">R</span>
           </button>
+          <button class="secondary-action-btn replay-scene-btn" id="btn-go-replay-scene" type="button">GO TO REPLAY SCENE</button>
         </div>
         <div class="replay-sub-hint">Triggers the Source Record “Save Replay Buffer” hotkey in OBS via WebSocket. SLC does not record or generate the video itself.</div>
 
         <!-- Per-source quick save (each capture source can define its own hotkey) -->
         <div class="replay-sources-section">
           <label class="section-label">CAPTURE SOURCES</label>
-          <div class="replay-sub-hint">Save one camera here, or use SAVE ALL REPLAYS. Goal capture also triggers every enabled camera unless a single source is selected in Goal Automation.</div>
+          <div class="replay-sub-hint">Save one camera here, or use Save Replay Buffer to trigger every enabled camera.</div>
           <div class="replay-source-buttons" id="replay-source-buttons">
             <div class="empty-queue-hint">Loading sources…</div>
           </div>
@@ -544,6 +651,7 @@
         <div class="session-team-card" data-side="home">
           <img class="session-team-logo hidden" id="session-home-logo" alt="Home team logo">
           <div class="session-team-name" id="session-home-name">HOME</div>
+          <div class="session-team-lineup hidden" id="session-home-lineup"></div>
           <div class="session-team-score" id="session-home-score">0</div>
           <div class="session-score-actions" id="session-home-score-actions"></div>
           <label class="session-logo-upload">SET LOGO<input type="file" id="session-home-logo-file" accept=".svg,image/svg+xml,image/png,image/jpeg"></label>
@@ -551,49 +659,88 @@
         <div class="session-team-card" data-side="away">
           <img class="session-team-logo hidden" id="session-away-logo" alt="Away team logo">
           <div class="session-team-name" id="session-away-name">AWAY</div>
+          <div class="session-team-lineup hidden" id="session-away-lineup"></div>
           <div class="session-team-score" id="session-away-score">0</div>
           <div class="session-score-actions" id="session-away-score-actions"></div>
           <label class="session-logo-upload">SET LOGO<input type="file" id="session-away-logo-file" accept=".svg,image/svg+xml,image/png,image/jpeg"></label>
         </div>
       </div>
-      <div id="scorebug-toggle-anchor"></div>
       <div class="athletics-dashboard hidden" id="athletics-dashboard">
         <section class="athletics-main card-panel" id="athletics-main">
           <div class="athletics-main-header">
             <div>
-              <span class="section-label">LIVE EVENT</span>
+              <span class="section-label" id="athletics-control-mode-label">LIVE EVENT</span>
               <h3>ATHLETICS CONTROL</h3>
             </div>
-            <div id="athletics-scorebug-toggle-slot"></div>
+            <div class="athletics-graphics-actions">
+              <div id="athletics-scorebug-controls-slot"></div>
+            </div>
           </div>
           <div class="athletics-live-standings">
-            <div class="athletics-standings-heading">
-              <h3>LIVE EVENT STANDINGS</h3>
-              <button type="button" class="secondary-action-btn" id="athletics-podium-toggle">SHOW PODIUM</button>
-            </div>
             <form id="athletics-event-form" class="session-inline-form athletics-live-event-form">
-              <label>LIVE EVENT TITLE
-                <input id="athletics-event-name" maxlength="100" placeholder="e.g. 200m Level 01 Boys" required>
+              <label>SELECT SCHEDULED EVENT
+                <select id="athletics-live-event-select" required></select>
               </label>
-              <label>EVENT TYPE
-                <select id="athletics-event-category" aria-label="Live event type">
-                  <option value="running">Running</option>
-                  <option value="shot-put">Shot Put</option>
-                  <option value="relay">Baton Relay</option>
-                </select>
-              </label>
-              <button type="submit" class="secondary-action-btn">UPDATE LIVE EVENT</button>
+              <button type="submit" class="secondary-action-btn">OPEN EVENT</button>
             </form>
-            <div class="athletics-event-standings" id="athletics-event-standings"></div>
-            <h3>HOUSE CHAMPIONSHIP</h3>
-            <div class="athletics-championship-standings" id="athletics-standings"></div>
+            <nav class="athletics-view-switch" aria-label="Athletics results view" role="tablist">
+              <button type="button" id="athletics-view-live" class="athletics-view-tab active" role="tab" aria-selected="true">LIVE</button>
+              <button type="button" id="athletics-view-after" class="athletics-view-tab" role="tab" aria-selected="false">AFTER</button>
+              <span id="athletics-view-status">Select an event to start.</span>
+            </nav>
+            <label class="athletics-live-standings-toggle">
+              <input id="athletics-live-standings-control" type="checkbox" checked>
+              <span>SHOW LIVE STANDINGS ON AIR</span>
+            </label>
+            <section id="athletics-live-panel" class="athletics-view-panel" role="tabpanel" aria-labelledby="athletics-view-live">
+              <section class="athletics-live-entry" aria-labelledby="athletics-live-entry-title">
+                <div class="athletics-live-entry-heading">
+                  <div><span class="section-label">LIVE CONTROL</span><h4 id="athletics-live-entry-title">ADD OR EDIT A RESULT</h4></div>
+                  <span>Drag or use ↑ ↓ on a result to change its place.</span>
+                </div>
+                <div class="session-event-layout">
+                  <form id="athletics-result-form" class="session-inline-form athletics-result-form">
+                    <div class="athletics-active-event" id="athletics-active-event">SELECT AN EVENT TO ADD RESULTS</div>
+                    <label id="athletics-athlete-label">ATHLETE<select id="athletics-result-athlete"></select></label>
+                    <label id="athletics-runners-label" class="hidden">RUNNERS IN ORDER
+                      <textarea id="athletics-result-runners" maxlength="400" placeholder="Runner 1, Runner 2, Runner 3, Runner 4"></textarea>
+                    </label>
+                    <label>HOUSE<select id="athletics-result-team" required></select></label>
+                    <label>TIME / RESULT<input id="athletics-result-value" maxlength="80" required></label>
+                    <label>PLACE<input id="athletics-result-place" type="number" min="1" max="999" value="1" required></label>
+                    <div class="athletics-result-form-actions">
+                      <button type="submit" class="secondary-action-btn" id="athletics-record-result">ADD TO LIVE STANDINGS</button>
+                      <button type="button" class="secondary-action-btn hidden" id="athletics-cancel-edit">CANCEL EDIT</button>
+                    </div>
+                  </form>
+                  <form id="athletics-shotput-form" class="session-inline-form athletics-shotput-form hidden">
+                    <label>ATHLETE<select id="athletics-shotput-athlete" required></select></label>
+                    <label>HOUSE<select id="athletics-shotput-team" required></select></label>
+                    <label>TURN<select id="athletics-shotput-attempt">
+                      <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                      <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                    </select></label>
+                    <label>FOUL THROW<input type="checkbox" id="athletics-shotput-foul"></label>
+                    <label>DISTANCE (METRES)<input id="athletics-shotput-distance" type="number" min="0.01" max="100" step="0.01"></label>
+                    <button type="submit" class="secondary-action-btn">SAVE / CORRECT TURN</button>
+                  </form>
+                </div>
+              </section>
+              <p id="athletics-roster-order-hint" class="athletics-roster-order-hint hidden">No result is required. All assigned runners are listed automatically; drag them into the race order.</p>
+              <div class="athletics-event-standings" id="athletics-event-standings" aria-label="Live event standings"></div>
+              <div class="athletics-shotput-table-wrap hidden" id="athletics-shotput-table-wrap">
+                <table class="athletics-shotput-table"><caption>SHOT PUT · BEST VALID THROW SETS THE PLACE</caption>
+                  <thead><tr><th>ATHLETE / HOUSE</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>BEST</th></tr></thead>
+                  <tbody id="athletics-shotput-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+            <section id="athletics-after-panel" class="athletics-view-panel hidden" role="tabpanel" aria-labelledby="athletics-view-after">
+              <div class="athletics-after-heading"><div><span class="section-label">AFTER THE EVENT</span><h3 id="athletics-after-event-name">FINAL RESULTS</h3></div>
+                <span>Official order · ready for the broadcast graphic</span></div>
+              <div class="athletics-event-standings athletics-after-standings" id="athletics-after-standings"></div>
+            </section>
           </div>
-          <section class="athletics-clock-card">
-            <div class="athletics-section-heading">
-              <span class="section-label">EVENT CLOCK</span>
-            </div>
-            <div id="athletics-match-controls-slot"></div>
-          </section>
           <section class="session-tool-card hidden" id="athletics-tools">
             <p class="session-tool-hint">Enter results as they happen. The live standings update immediately and can be corrected at any time.</p>
             <details class="athletics-setup-accordion">
@@ -603,47 +750,7 @@
               <button type="submit" class="secondary-action-btn">ADD HOUSE</button>
             </form>
             <div class="athletics-house-list" id="athletics-house-list"></div>
-            <div class="session-event-layout">
-              <form id="athletics-result-form" class="session-inline-form athletics-result-form">
-                <div class="athletics-active-event" id="athletics-active-event">SET A LIVE EVENT TITLE TO RECORD RESULTS</div>
-                <label id="athletics-athlete-label">ATHLETE
-                  <input id="athletics-result-athlete" maxlength="80">
-                </label>
-                <label id="athletics-runners-label" class="hidden">RUNNERS IN ORDER
-                  <textarea id="athletics-result-runners" maxlength="400" placeholder="Runner 1, Runner 2, Runner 3, Runner 4"></textarea>
-                </label>
-                <label>HOUSE<select id="athletics-result-team" required></select></label>
-                <label>RESULT / TIME / DISTANCE<input id="athletics-result-value" maxlength="80" required></label>
-                <label>PLACE<input id="athletics-result-place" type="number" min="1" max="999" value="1" required></label>
-                <button type="submit" class="secondary-action-btn" id="athletics-record-result">ADD TO LIVE STANDINGS</button>
-              </form>
-              <form id="athletics-shotput-form" class="session-inline-form athletics-shotput-form hidden">
-                <label>ATHLETE<input id="athletics-shotput-athlete" maxlength="80" required></label>
-                <label>HOUSE<select id="athletics-shotput-team" required></select></label>
-                <label>TURN
-                  <select id="athletics-shotput-attempt">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                  </select>
-                </label>
-                <label>DISTANCE (METRES)<input id="athletics-shotput-distance" type="number" min="0.01" max="100" step="0.01" required></label>
-                <button type="submit" class="secondary-action-btn">SAVE TURN</button>
-              </form>
-            </div>
             </details>
-            <div class="athletics-shotput-table-wrap hidden" id="athletics-shotput-table-wrap">
-              <table class="athletics-shotput-table">
-                <caption>SHOT PUT ATTEMPTS · BEST DISTANCE DETERMINES THE STANDINGS</caption>
-                <thead>
-                  <tr><th>ATHLETE / HOUSE</th><th>TURN 1</th><th>TURN 2</th><th>TURN 3</th><th>TURN 4</th><th>TURN 5</th><th>TURN 6</th><th>FINAL</th></tr>
-                </thead>
-                <tbody id="athletics-shotput-table-body"></tbody>
-              </table>
-            </div>
           </section>
         </section>
         <aside class="athletics-side-rail" aria-label="Notices and replay controls">
@@ -651,9 +758,6 @@
           <div id="athletics-replay-slot"></div>
         </aside>
       </div>
-      <button type="button" class="secondary-action-btn session-scorebug-toggle hidden" id="session-scorebug-toggle">
-        EXPAND SCOREBUG
-      </button>
       <div id="session-clock-controls-anchor"></div>
       <div class="session-clock-controls" id="session-clock-controls">
         <div>
@@ -736,20 +840,14 @@
           <div class="session-record-list" id="session-participant-list"></div>
         </section>
 
-        <section class="session-tool-card" id="formal-event-tools">
-          <h3>FORMAL EVENT CUE</h3>
-          <form id="formal-cue-form" class="session-inline-form">
-            <input id="formal-cue-title" placeholder="Message / speaker / award title" maxlength="80" required>
-            <input id="formal-cue-subtitle" placeholder="Subtitle / details" maxlength="120">
-            <button type="submit" class="secondary-action-btn">TAKE TO AIR</button>
-          </form>
-        </section>
-
         <section class="session-tool-card" id="replay-operations">
           <h3>REPLAY PLAYBACK</h3>
           <p class="session-tool-hint">Capture is handled by OBS Source Record. Select a saved video to load it into the configured OBS replay media source.</p>
-          <div class="session-inline-form replay-file-controls">
+          <div class="replay-buffer-actions">
             <button type="button" class="secondary-action-btn" id="session-replay-capture">SAVE REPLAY BUFFER</button>
+            <button type="button" class="secondary-action-btn replay-scene-btn" id="session-go-replay-scene">GO TO REPLAY SCENE</button>
+          </div>
+          <div class="session-inline-form replay-file-controls">
             <button type="button" class="secondary-action-btn" id="session-replay-select">SELECT REPLAY FILE</button>
             <span id="session-replay-selected">No replay selected</span>
             <button type="button" class="slc-primary-button" id="session-replay-air" disabled>AIR REPLAY</button>
@@ -900,6 +998,18 @@
         <button class="primary-action-btn" id="btn-save-settings">SAVE CONFIGURATION</button>
       </div>
     </div>
+  </div>
+
+  <div class="graphics-port-blocker" id="graphics-port-blocker" role="dialog" aria-modal="true" aria-labelledby="graphics-port-title">
+    <form class="graphics-port-dialog" id="graphics-port-form">
+      <span class="graphics-port-alert">CONNECTING · GRAPHICS SERVER</span>
+      <h2 id="graphics-port-title">Starting the graphics server</h2>
+      <p>The app will be ready as soon as the graphics server is online.</p>
+      <label class="hidden" for="graphics-port-input">NEW PORT</label>
+      <input class="hidden" id="graphics-port-input" type="number" min="1024" max="65535" step="1" required>
+      <div class="graphics-port-error" id="graphics-port-error" role="alert"></div>
+      <button class="slc-primary-button hidden" id="graphics-port-submit" type="submit">CONNECT GRAPHICS SERVER</button>
+    </form>
   </div>
 
   <!-- Scripts -->

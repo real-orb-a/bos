@@ -74,15 +74,46 @@ body {
   background: rgba(10, 14, 26, 0.96);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.42);
   color: #fff;
+  opacity: 1;
   transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    max-height 0.35s ease, border-radius 0.25s ease;
+    max-height 0.35s ease, border-radius 0.25s ease, opacity 0.35s ease;
+}
+.athletics-standings:not(.expanded):not(.after-results) {
+  width: max-content;
+  max-width: min(82vw, 440px);
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  border-radius: 3px;
 }
 
+.athletics-standings.faded-out { opacity: 0; visibility: hidden; }
+
 .athletics-standings.expanded {
-  width: 620px;
-  max-height: 600px;
+  width: max-content;
+  max-width: min(90vw, 900px);
+  max-height: min(76vh, 820px);
   border-radius: 6px;
 }
+
+.athletics-standings.after-results {
+  width: 680px;
+  max-height: min(82vh, 900px);
+  border-left-color: #fbbf24;
+}
+.athletics-standings.after-results:not(.expanded) {
+  width: max-content;
+  max-width: min(82vw, 440px);
+  max-height: min(42vh, 320px);
+  overflow: auto;
+}
+.athletics-standings.expanded #athletics-result-list { max-height: min(70vh, 740px); overflow-y: auto; }
+
+.athletics-standings.after-results #athletics-result-list { max-height: calc(82vh - 62px); overflow-y: auto; }
+.athletics-standings.after-results .athletics-result:nth-child(n + 2) {
+  max-height: 64px; min-height: 44px; overflow: visible; padding: 6px 12px;
+  border-bottom-color: rgba(255, 255, 255, 0.08); opacity: 1; transform: none;
+}
+.athletics-standings.after-results header span { color: #fbbf24; }
 
 .athletics-standings header {
   display: flex;
@@ -122,6 +153,7 @@ body {
 }
 
 .athletics-result {
+  position: relative;
   display: grid;
   grid-template-columns: 26px 34px minmax(0, 1fr) minmax(60px, auto);
   align-items: center;
@@ -136,6 +168,25 @@ body {
     opacity 0.22s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
     border-color 0.2s ease;
 }
+.athletics-standings.roster-only .athletics-result { grid-template-columns: 26px 34px minmax(0, 1fr); }
+.athletics-standings:not(.expanded) .athletics-result {
+  grid-template-columns: 16px 12px max-content max-content;
+  gap: 5px;
+  max-height: 24px; min-height: 22px; overflow: hidden; padding: 1px 7px;
+  border-bottom-color: rgba(255,255,255,.08); opacity: 1; transform: none;
+}
+.athletics-standings:not(.expanded).roster-only .athletics-result { grid-template-columns: 16px 12px max-content; }
+.athletics-standings:not(.expanded) .athletics-result:nth-child(n + 2) {
+  max-height: 24px; min-height: 22px; overflow: hidden; padding: 1px 7px;
+  border-bottom-color: rgba(255,255,255,.08); opacity: 1; transform: none;
+}
+.athletics-standings:not(.expanded) header {
+  min-height: 18px;
+  gap: 8px;
+  padding: 1px 7px;
+}
+.athletics-standings:not(.expanded) header span { max-width: 96px; font-size: 7px; letter-spacing: .7px; }
+.athletics-standings:not(.expanded) header strong { max-width: 180px; font-size: 9px; }
 
 .athletics-result:nth-child(n + 2) {
   max-height: 0;
@@ -149,11 +200,12 @@ body {
 }
 
 .athletics-standings.expanded .athletics-result {
-  grid-template-columns: 32px 36px minmax(90px, 1fr) minmax(70px, auto) minmax(70px, auto);
+  grid-template-columns: 32px 42px max-content max-content;
   gap: 10px;
   min-height: 54px;
   padding: 7px 14px;
 }
+.athletics-standings.expanded.roster-only .athletics-result { grid-template-columns: 32px 42px max-content; }
 
 .athletics-standings.expanded header {
   min-height: 48px;
@@ -170,9 +222,14 @@ body {
 }
 
 .athletics-standings.expanded .athletics-house-logo {
+  display: block;
   width: 34px;
   height: 34px;
 }
+.athletics-standings.expanded .athletics-athlete { max-width: min(58vw, 560px); font-size: 14px; }
+.athletics-standings.expanded .athletics-runner { overflow: visible; text-overflow: clip; }
+.athletics-standings.expanded .athletics-result-value { white-space: nowrap; }
+.athletics-standings.expanded .athletics-team-color.has-logo { display: none; }
 
 .athletics-standings.expanded .athletics-result:nth-child(n + 2) {
   max-height: 64px;
@@ -201,12 +258,21 @@ body {
 }
 
 .athletics-place {
+  position: relative;
   color: #fbbf24;
   font: 700 15px 'Chakra Petch', sans-serif;
   text-align: center;
 }
+.athletics-place[data-movement="up"]::after { content: '↑'; position: absolute; top: -7px; right: -5px; color: #22c55e; font: 900 12px Inter, sans-serif; }
+.athletics-place[data-movement="down"]::after { content: '↓'; position: absolute; top: -7px; right: -5px; color: #ef4444; font: 900 12px Inter, sans-serif; }
+.athletics-team-color { width: 26px; height: 26px; display: block; border: 1px solid rgba(255,255,255,.28); border-radius: 2px; }
+.athletics-standings:not(.expanded) .athletics-team-color { width: 11px; height: 11px; border-width: 1px; }
+.athletics-standings:not(.expanded) .athletics-athlete { gap: 2px; font-size: 9px; }
+.athletics-standings:not(.expanded) .athletics-place { font-size: 10px; }
+.athletics-standings:not(.expanded) .athletics-result-value { font-size: 9px; }
 
 .athletics-house-logo {
+  display: none;
   width: 26px;
   height: 26px;
   object-fit: contain;
@@ -239,24 +305,14 @@ body {
   white-space: nowrap;
 }
 
-.athletics-handoff {
-  flex: 0 0 auto;
-  color: #38bdf8;
-  font: 700 18px 'Chakra Petch', sans-serif;
-  animation: athletics-baton-handoff 1.35s ease-in-out infinite;
-}
-
-@keyframes athletics-baton-handoff {
-  0%, 100% {
-    opacity: 0.55;
-    transform: translateX(-3px) scale(0.9);
-  }
-  45% {
-    opacity: 1;
-    transform: translateX(3px) scale(1.15);
-  }
-}
-
+.athletics-relay-compact { gap: 5px; }
+.athletics-relay-current { min-width: 24px; text-align: center; transition: opacity .25s ease, transform .25s ease; }
+.athletics-relay-current.passing-out { opacity: .2; transform: translateX(-4px); }
+.athletics-relay-transfer { position: absolute; z-index: 5; left: 30px; right: 6px; top: 50%; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 22px; padding: 2px 6px; border: 1px solid rgba(250,204,21,.55); border-radius: 3px; color: #facc15; background: rgba(15,23,42,.96); font: 900 12px Inter, sans-serif; opacity: .55; white-space: nowrap; pointer-events: none; transform: translateY(-50%); }
+.athletics-relay-transfer.passing { opacity: 1; animation: baton-preview-slide .62s cubic-bezier(.2,.75,.25,1) both; }
+.athletics-relay-incoming { color: #fff; }
+@keyframes baton-preview-slide { from { opacity: .35; transform: translate(18px,-50%); } to { opacity: 1; transform: translate(0,-50%); } }
+.athletics-relay-team-runner.current { color: #facc15; text-shadow: 0 0 9px rgba(250, 204, 21, .55); }
 .athletics-house-name {
   overflow: hidden;
   color: rgba(255, 255, 255, 0.65);
@@ -283,134 +339,6 @@ body {
   font-size: 11px;
 }
 
-.athletics-podium {
-  position: absolute;
-  top: 48px;
-  left: 48px;
-  width: min(920px, calc(100vw - 96px));
-  padding: 18px 22px 22px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-top: 4px solid #fbbf24;
-  border-radius: 9px;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(10, 14, 26, 0.91));
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.52);
-  color: #fff;
-  animation: podium-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.athletics-podium header {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px 20px;
-  align-items: center;
-  margin-bottom: 18px;
-  text-transform: uppercase;
-}
-
-.athletics-podium header span {
-  color: #38bdf8;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.athletics-podium header strong {
-  grid-row: 2;
-  font: 700 22px 'Chakra Petch', sans-serif;
-  letter-spacing: 1px;
-}
-
-.athletics-podium header b {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  padding: 8px 12px;
-  border: 1px solid rgba(251, 191, 36, 0.55);
-  border-radius: 4px;
-  color: #fbbf24;
-  font-size: 12px;
-  letter-spacing: 2px;
-}
-
-#athletics-podium-places {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  align-items: end;
-  min-height: 250px;
-}
-
-.podium-step {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-bottom: 5px solid var(--house-color);
-  border-radius: 7px 7px 2px 2px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--house-color) 35%, #0f172a), rgba(15, 23, 42, 0.98));
-  text-align: center;
-}
-
-.podium-step::before {
-  position: absolute;
-  inset: 8% 0 18%;
-  background-image: var(--house-logo);
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  content: '';
-  opacity: 0.2;
-  filter: grayscale(0.35);
-}
-
-.podium-place-1 {
-  min-height: 250px;
-}
-
-.podium-place-2,
-.podium-place-3 {
-  min-height: 205px;
-}
-
-.podium-identity {
-  z-index: 1;
-  display: grid;
-  gap: 7px;
-  width: 100%;
-  padding: 18px 12px 20px;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.95);
-}
-
-.podium-identity strong {
-  overflow-wrap: anywhere;
-  font: 800 22px 'Inter', sans-serif;
-}
-
-.podium-identity span {
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-}
-
-.podium-step > b {
-  position: absolute;
-  top: 12px;
-  left: 14px;
-  color: rgba(255, 255, 255, 0.94);
-  font: 900 36px 'Chakra Petch', sans-serif;
-  text-shadow: 0 2px 8px #000;
-}
-
-@keyframes podium-enter {
-  from { opacity: 0; transform: translateY(24px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
 .athletics-standings:not(.expanded) .athletics-empty {
   padding: 8px 12px;
   font-size: 10px;
@@ -421,14 +349,6 @@ body {
   .athletics-standings,
   .athletics-standings header,
   .athletics-result,
-  .athletics-podium {
-    transition-duration: 0.01ms;
-    transition-delay: 0ms !important;
-  }
-
-  .athletics-podium {
-    animation-duration: 0.01ms;
-  }
 }
 
 .score-row {
@@ -752,18 +672,18 @@ body {
 }
 
 .score-bug.volleyball-mode .sets-value,
-.score-bug.table-tennis-mode .sets-value {
+.score-bug.racket-mode .sets-value {
   font-size: 18px;
   line-height: 1;
 }
 
 .score-bug.expanded.volleyball-mode .sets-value,
-.score-bug.expanded.table-tennis-mode .sets-value {
+.score-bug.expanded.racket-mode .sets-value {
   font-size: 20px;
 }
 
 .score-bug.volleyball-mode .sets-label,
-.score-bug.table-tennis-mode .sets-label {
+.score-bug.racket-mode .sets-label {
   font-size: 8px;
   letter-spacing: 0.8px;
 }
@@ -928,33 +848,33 @@ body {
   display: block;
 }
 
-.score-bug.table-tennis-mode {
+.score-bug.racket-mode {
   width: min(420px, calc(100vw - 32px));
   height: 42px;
 }
 
-.score-bug.expanded.table-tennis-mode {
-  width: min(480px, calc(100vw - 32px));
-  height: 72px;
+.score-bug.expanded.racket-mode {
+  width: min(620px, calc(100vw - 32px));
+  height: 78px;
 }
 
-.score-bug.table-tennis-mode .score-row {
+.score-bug.racket-mode .score-row {
   height: 42px;
   background: linear-gradient(110deg, rgba(10, 14, 26, 0.98), rgba(17, 24, 39, 0.97));
 }
 
-.score-bug.expanded.table-tennis-mode .score-row {
+.score-bug.expanded.racket-mode .score-row {
   height: 50px;
 }
 
-.score-bug.table-tennis-mode .clock-display,
-.score-bug.table-tennis-mode .period-display,
-.score-bug.table-tennis-mode .offense-display,
-.score-bug.table-tennis-mode .stoppage-display {
+.score-bug.racket-mode .clock-display,
+.score-bug.racket-mode .period-display,
+.score-bug.racket-mode .offense-display,
+.score-bug.racket-mode .stoppage-display {
   display: none;
 }
 
-.score-bug.table-tennis-mode .match-info {
+.score-bug.racket-mode .match-info {
   width: 48px;
   flex-basis: 48px;
   gap: 0;
@@ -964,23 +884,41 @@ body {
   background: transparent;
 }
 
-.score-bug.expanded.table-tennis-mode .match-info {
+.score-bug.expanded.racket-mode .match-info {
   width: 54px;
   flex-basis: 54px;
 }
 
 
 
-.score-bug.table-tennis-mode .team-short {
-  display: inline-block;
-  max-width: 100px;
+.score-bug.racket-mode .team-short {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 138px;
   color: #fff;
   font-size: 11px;
   letter-spacing: 0.3px;
 }
 
-.score-bug.table-tennis-mode .team-home .team-meta,
-.score-bug.table-tennis-mode .team-away .team-meta {
+.player-shortcode-badge {
+  display: inline;
+  min-width: 0;
+  height: auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font: 900 11px 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px;
+}
+
+.score-bug.racket-mode .team-home .team-meta,
+.score-bug.racket-mode .team-away .team-meta {
   left: auto;
   right: auto;
   justify-content: center;
@@ -989,8 +927,8 @@ body {
   text-align: center;
 }
 
-.score-bug.expanded.table-tennis-mode .team-home .team-meta,
-.score-bug.expanded.table-tennis-mode .team-away .team-meta {
+.score-bug.expanded.racket-mode .team-home .team-meta,
+.score-bug.expanded.racket-mode .team-away .team-meta {
   left: auto;
   right: auto;
   padding: 0;
@@ -998,7 +936,7 @@ body {
   text-align: center;
 }
 
-.score-bug.table-tennis-mode .team-name {
+.score-bug.racket-mode .team-name {
   display: none;
   max-width: 100%;
   overflow: hidden;
@@ -1015,9 +953,9 @@ body {
   display: none;
 }
 
-.score-bug.expanded.table-tennis-mode .team-name {
+.score-bug.expanded.racket-mode .team-name {
   display: block;
-  max-width: 140px;
+  max-width: min(240px, 34vw);
   font-size: 10px;
   opacity: 1;
   transform: none;
@@ -1028,22 +966,22 @@ body {
   overflow: hidden;
 }
 
-.score-bug.expanded.table-tennis-mode .team-short {
+.score-bug.expanded.racket-mode .team-short {
   display: none;
 }
 
-.score-bug.expanded.table-tennis-mode .team-meta {
+.score-bug.expanded.racket-mode .team-meta {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
 }
 
-.score-bug.table-tennis-mode .team-tennis-team-name {
+.score-bug.racket-mode .team-house-subtitle {
   display: none;
 }
 
-.score-bug.expanded.table-tennis-mode .team-tennis-team-name {
+.score-bug.expanded.racket-mode .team-house-subtitle {
   display: block;
   color: rgba(255, 255, 255, 0.5);
   font-size: 8px;
@@ -1055,31 +993,31 @@ body {
   margin-top: 2px;
 }
 
-.score-bug.table-tennis-mode .team-score-wrapper {
+.score-bug.racket-mode .team-score-wrapper {
   width: 34px;
   flex-basis: 34px;
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.055);
 }
 
-.score-bug.table-tennis-mode .team-score {
+.score-bug.racket-mode .team-score {
   font-size: 24px;
 }
 
-.score-bug.expanded.table-tennis-mode .team-score-wrapper {
+.score-bug.expanded.racket-mode .team-score-wrapper {
   width: 38px;
   flex-basis: 38px;
 }
 
-.score-bug.expanded.table-tennis-mode .team-score {
+.score-bug.expanded.racket-mode .team-score {
   font-size: 30px;
 }
 
-.score-bug.table-tennis-mode .sets-display {
+.score-bug.racket-mode .sets-display {
   display: flex;
 }
 
-.score-bug.expanded.table-tennis-mode .sets-display {
+.score-bug.expanded.racket-mode .sets-display {
   gap: 2px;
 }
 

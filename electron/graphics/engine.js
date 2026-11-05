@@ -27,21 +27,30 @@ class GraphicsEngine extends EventEmitter {
     this.httpServer = null;
     this.wss = null;
     this.port = this.config.get('graphics.httpPort') ?? 8088;
+    this.serverStatus = { state: 'starting', port: this.port, error: '' };
     this.remoteControlPassword = this.config.get('graphics.remoteControlKey');
     if (typeof this.remoteControlPassword !== 'string' || this.remoteControlPassword.length < 8) {
       this.remoteControlPassword = crypto.randomBytes(24).toString('hex');
       this.config.set('graphics.remoteControlKey', this.remoteControlPassword);
     }
     this.remoteImmediateScore = this.config.get('graphics.remoteImmediateScore') === true;
+    this.remoteAthleticsReorderHandler = null;
+    this.remoteAthleticsBatonTransferHandler = null;
     this.pendingRemoteScoreProposals = new Map();
     this.connectedClients = new Set();
     this.replayOverlayActive = false;
     this.replayOverlayData = null;
     this.scorebugVisible = true;
     this.scorebugExpanded = false;
+    this.athleticsRelayMode = 'compact';
+    this.athleticsRelayEventId = null;
+    this.athleticsRelayRunnerIndexes = {};
     this.scorebugMatchName = '';
     this.sportScorebug = null;
     this.screenCenterScorebugVisible = false;
+    this.centerScorebugTimer = null;
+    this.cornerScorebugTimer = null;
+    this.centerScorebugTransitionId = 0;
     this.athleticsStandings = { active: false, event: null, houses: [] };
     this.topMessageActive = false;
     this.topMessageData = null;
@@ -310,6 +319,16 @@ class GraphicsEngine extends EventEmitter {
         case 'OFFENSE_RESET':
           this.matchEngine.resetOffenseClock();
           break;
+        case 'ATHLETICS_REORDER': {
+          if (typeof this.remoteAthleticsReorderHandler !== 'function') {
+            throw new Error('Athletics race order is unavailable.');
+          }
+          this.remoteAthleticsReorderHandler(command.resultIds);
+          break;
+        }
+        case 'ATHLETICS_BATON_TRANSFER':
+          this.transferAthleticsBaton(command.resultId);
+          break;
         default:
           throw new Error('Unknown remote control action.');
       }
@@ -342,7 +361,9 @@ class GraphicsEngine extends EventEmitter {
     return queued;
   }
 
-  startServer() {
+  startServer(requestedPort = this.port) {
+    this.serverStatus = { state: 'starting', port: requestedPort, error: '' };
+    this.emit('serverStatusChanged', this.getServerStatus());
     const rootDir = path.resolve(__dirname, '..', '..');
 
     this.httpServer = http.createServer((req, res) => {
@@ -414,6 +435,9 @@ class GraphicsEngine extends EventEmitter {
     });
 
     this.wss = new WebSocket.Server({ server: this.httpServer });
+    // The WebSocket server re-emits HTTP server errors; consume that event so
+    // EADDRINUSE can be reported to the app instead of becoming an uncaught error.
+    this.wss.on('error', () => {});
 
     this.wss.on('connection', (ws) => {
       this.connectedClients.add(ws);
@@ -438,6 +462,8 @@ class GraphicsEngine extends EventEmitter {
         },
         scorebugVisible: this.scorebugVisible,
         scorebugExpanded: this.scorebugExpanded,
+        athleticsRelayMode: this.athleticsRelayMode,
+        athleticsRelayRunnerIndexes: this.athleticsRelayRunnerIndexes,
         scorebugMatchName: this.scorebugMatchName,
         screenCenterScorebugVisible: this.screenCenterScorebugVisible,
         sportScorebug: this.sportScorebug,
@@ -471,9 +497,54 @@ class GraphicsEngine extends EventEmitter {
       });
     });
 
-    this.httpServer.listen(this.port, () => {
-      this.port = this.httpServer.address().port;
+    const server = this.httpServer;
+    server.on('error', error => {
+      if (server !== this.httpServer) return;
+      const state = error.code === 'EADDRINUSE' ? 'port-conflict' : 'error';
+      this.serverStatus = { state, port: requestedPort, error: error.message };
+      this.emit('serverStatusChanged', this.getServerStatus());
+      console.error(`[GraphicsEngine] Server failed on port ${requestedPort}:`, error.message);
+    });
+    server.listen(requestedPort, () => {
+      if (server !== this.httpServer) return;
+      this.port = server.address().port;
+      this.serverStatus = { state: 'running', port: this.port, error: '' };
+      this.emit('serverStatusChanged', this.getServerStatus());
       console.log(`[GraphicsEngine] Server listening at http://localhost:${this.port}`);
+    });
+  }
+
+  getServerStatus() {
+    return { ...this.serverStatus };
+  }
+
+  async setServerPort(port) {
+    const nextPort = Number(port);
+    if (!Number.isInteger(nextPort) || nextPort < 1024 || nextPort > 65535) {
+      throw new Error('Enter a port number from 1024 to 65535.');
+    }
+    const previousServer = this.httpServer;
+    const previousWebSocketServer = this.wss;
+    if (previousWebSocketServer) {
+      previousWebSocketServer.clients.forEach(client => client.terminate());
+      await new Promise(resolve => {
+        try { previousWebSocketServer.close(resolve); } catch (_) { resolve(); }
+      });
+    }
+    if (previousServer?.listening) {
+      await new Promise(resolve => previousServer.close(resolve));
+    }
+    this.connectedClients.clear();
+
+    return new Promise(resolve => {
+      const onStatus = status => {
+        if (status.state === 'starting') return;
+        this.removeListener('serverStatusChanged', onStatus);
+        if (status.state === 'running') this.config.set('graphics.httpPort', nextPort);
+        resolve(status);
+      };
+      this.on('serverStatusChanged', onStatus);
+      this.startServer(nextPort);
     });
   }
 
@@ -539,20 +610,18 @@ class GraphicsEngine extends EventEmitter {
     } else if (['table-tennis', 'badminton'].includes(session?.modeId)) {
       const state = session.sportState || {};
       this.sportScorebug = {
-        mode: session.modeId === 'table-tennis' ? 'table-tennis' : 'games',
-        ...(session.modeId === 'table-tennis' ? {
-          homeName: session.teams.home.name,
-          awayName: session.teams.away.name,
-          target: state.pointsToWin || 11,
-          pointsToWinBy: state.pointsToWinBy || 2
-        } : {}),
+        mode: session.modeId,
+        homeName: session.teams.home.name,
+        awayName: session.teams.away.name,
+        homeShort: session.teams.home.shortName,
+        awayShort: session.teams.away.shortName,
+        target: state.pointsToWin || (session.modeId === 'badminton' ? 21 : 11),
+        pointsToWinBy: state.pointsToWinBy || 2,
         homeSets: state.sets?.home || 0,
         awaySets: state.sets?.away || 0,
-        ...(session.modeId === 'table-tennis' ? {
-          matchFormat: state.tableTennis?.format || 'singles',
-          homePlayers: state.tableTennis?.players?.home || [],
-          awayPlayers: state.tableTennis?.players?.away || []
-        } : {})
+        matchFormat: state.racketMatch?.format || 'singles',
+        homePlayers: state.racketMatch?.players?.home || [],
+        awayPlayers: state.racketMatch?.players?.away || []
       };
     }
     this.broadcast({ type: 'SPORT_SCOREBUG_UPDATE', sportScorebug: this.sportScorebug });
@@ -561,6 +630,9 @@ class GraphicsEngine extends EventEmitter {
 
   setScorebugVisible(visible) {
     const next = !!visible;
+    if (next && (this.screenCenterScorebugVisible || this.centerScorebugTimer || this.cornerScorebugTimer)) {
+      return false;
+    }
     const changed = next !== this.scorebugVisible;
     this.scorebugVisible = next;
 
@@ -578,13 +650,46 @@ class GraphicsEngine extends EventEmitter {
       type: 'SCOREBUG_VISIBILITY',
       visible: this.scorebugVisible
     });
+    this.emit('scorebugVisibilityChanged', this.scorebugVisible);
     return this.scorebugVisible;
   }
 
   setScorebugExpanded(expanded) {
+    if (this.screenCenterScorebugVisible) return false;
     this.scorebugExpanded = !!expanded;
-    this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: this.scorebugExpanded });
+    if (this.athleticsStandings?.event?.category === 'relay') {
+      this.athleticsRelayMode = this.scorebugExpanded ? 'expanded' : 'compact';
+    }
+    this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: this.scorebugExpanded, athleticsRelayMode: this.athleticsRelayMode });
     return this.scorebugExpanded;
+  }
+
+  setAthleticsRelayMode(mode) {
+    if (!['compact', 'expanded', 'team'].includes(mode)) throw new Error('Choose compact, expanded, or full-team relay display.');
+    if (this.screenCenterScorebugVisible) return this.athleticsRelayMode;
+    this.athleticsRelayMode = mode;
+    this.scorebugExpanded = mode !== 'compact';
+    this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: this.scorebugExpanded, athleticsRelayMode: mode });
+    return this.athleticsRelayMode;
+  }
+
+  resetAthleticsScorebug() {
+    ++this.centerScorebugTransitionId;
+    clearTimeout(this.centerScorebugTimer);
+    clearTimeout(this.cornerScorebugTimer);
+    this.centerScorebugTimer = null;
+    this.cornerScorebugTimer = null;
+    this.screenCenterScorebugVisible = false;
+    this.scorebugVisible = true;
+    this.scorebugExpanded = true;
+    this.athleticsRelayMode = 'compact';
+    this.athleticsRelayEventId = null;
+    this.broadcast({ type: 'SCREEN_CENTER_SCOREBUG_VISIBILITY', visible: false });
+    this.broadcast({ type: 'SCOREBUG_VISIBILITY', visible: true });
+    this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: true, athleticsRelayMode: this.athleticsRelayMode });
+    this.emit('screenCenterScorebugChanged', false);
+    this.emit('scorebugVisibilityChanged', true);
+    return true;
   }
 
   // Screen center scorebug: a separate browser-source graphic that phases in
@@ -593,19 +698,51 @@ class GraphicsEngine extends EventEmitter {
   // the two are mutually exclusive and both stay in sync via the same WS state.
   setScreenCenterScorebugVisible(visible) {
     const next = !!visible;
-    const changed = next !== this.screenCenterScorebugVisible;
-    this.screenCenterScorebugVisible = next;
+    if (next && this.screenCenterScorebugVisible) return true;
+    const transitionId = ++this.centerScorebugTransitionId;
+    clearTimeout(this.centerScorebugTimer);
+    clearTimeout(this.cornerScorebugTimer);
+    this.centerScorebugTimer = null;
+    this.cornerScorebugTimer = null;
 
-    // Cross-fade with the main score bug: center in => corner out, center out => corner in.
-    if (changed) {
-      this.setScorebugVisible(!next);
+    if (next) {
+      this.screenCenterScorebugVisible = true;
+      this.scorebugExpanded = false;
+      this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: false });
+      this.setScorebugVisible(false);
+      this.broadcast({ type: 'SCREEN_CENTER_SCOREBUG_VISIBILITY', visible: true });
+      this.emit('screenCenterScorebugChanged', true);
+      // Start expanding as the fade begins, so it animates from compact instead
+      // of appearing at full size or waiting until the fade has finished.
+      this.centerScorebugTimer = setTimeout(() => {
+        if (transitionId !== this.centerScorebugTransitionId || !this.screenCenterScorebugVisible) return;
+        this.centerScorebugTimer = null;
+        this.scorebugExpanded = true;
+        this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: true });
+      }, 50);
+      return true;
     }
 
-    this.broadcast({
-      type: 'SCREEN_CENTER_SCOREBUG_VISIBILITY',
-      visible: this.screenCenterScorebugVisible
-    });
-    return this.screenCenterScorebugVisible;
+    if (!this.screenCenterScorebugVisible) return false;
+    // Collapse first, hold the compact center bug for half a second, then fade it
+    // out. Restore the corner bug 700ms after that fade begins.
+    this.scorebugExpanded = false;
+    this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: false });
+    this.centerScorebugTimer = setTimeout(() => {
+      if (transitionId !== this.centerScorebugTransitionId) return;
+      this.centerScorebugTimer = null;
+      this.screenCenterScorebugVisible = false;
+      this.broadcast({ type: 'SCREEN_CENTER_SCOREBUG_VISIBILITY', visible: false });
+      this.emit('screenCenterScorebugChanged', false);
+      this.cornerScorebugTimer = setTimeout(() => {
+        if (transitionId !== this.centerScorebugTransitionId) return;
+        this.cornerScorebugTimer = null;
+        this.scorebugVisible = true;
+        this.broadcast({ type: 'SCOREBUG_VISIBILITY', visible: true });
+        this.emit('scorebugVisibilityChanged', true);
+      }, 700);
+    }, 500);
+    return true;
   }
 
   setScorebugMatchName(name) {
@@ -622,8 +759,80 @@ class GraphicsEngine extends EventEmitter {
       throw new Error('Athletics standings state must be an object.');
     }
     this.athleticsStandings = JSON.parse(JSON.stringify(standings));
+    if (standings.event?.category === 'relay') {
+      if (this.athleticsRelayEventId !== standings.event.id) {
+        this.athleticsRelayEventId = standings.event.id;
+        this.athleticsRelayRunnerIndexes = {};
+        this.athleticsRelayMode = 'compact';
+      }
+      const validIds = new Set((standings.event.results || []).map(result => result.id));
+      for (const id of Object.keys(this.athleticsRelayRunnerIndexes)) {
+        if (!validIds.has(id)) delete this.athleticsRelayRunnerIndexes[id];
+      }
+      for (const result of standings.event.results || []) {
+        const storedIndex = Number.isInteger(result.currentRunnerIndex) ? result.currentRunnerIndex : this.athleticsRelayRunnerIndexes[result.id];
+        this.athleticsRelayRunnerIndexes[result.id] = Math.min(
+          Math.max(0, Number.isInteger(storedIndex) ? storedIndex : 0),
+          Math.max(0, (result.runnerNames || []).length - 1)
+        );
+      }
+      this.scorebugExpanded = this.athleticsRelayMode !== 'compact';
+      this.broadcast({ type: 'SCOREBUG_EXPANSION', expanded: this.scorebugExpanded, athleticsRelayMode: this.athleticsRelayMode });
+    } else {
+      this.athleticsRelayEventId = null;
+      this.athleticsRelayRunnerIndexes = {};
+    }
     this.broadcast({ type: 'ATHLETICS_STANDINGS_UPDATE', standings: this.athleticsStandings });
     return this.athleticsStandings;
+  }
+
+  transferAthleticsBaton(resultId) {
+    if (typeof this.remoteAthleticsBatonTransferHandler === 'function') {
+      const transfer = this.remoteAthleticsBatonTransferHandler(resultId);
+      this.athleticsRelayRunnerIndexes[resultId] = transfer.runnerIndex;
+      this.broadcast({
+        type: 'ATHLETICS_BATON_TRANSFER',
+        eventId: transfer.eventId,
+        resultId: transfer.resultId,
+        runnerIndex: transfer.runnerIndex,
+        nextRunnerName: transfer.nextRunnerName,
+        complete: transfer.complete
+      });
+      // The transfer event drives the visual handoff. Re-broadcasting all
+      // standings here would rebuild scorebug/remote rows and erase the arrow
+      // before its preview-and-slide animation completes.
+      if (transfer.standings) this.athleticsStandings = JSON.parse(JSON.stringify(transfer.standings));
+      return {
+        runnerIndex: transfer.runnerIndex,
+        nextRunnerName: transfer.nextRunnerName,
+        complete: transfer.complete
+      };
+    }
+    const event = this.athleticsStandings?.event;
+    if (!this.athleticsStandings?.active || this.athleticsStandings.displayMode === 'after' || event?.category !== 'relay') {
+      throw new Error('Baton transfer is only available during a live relay.');
+    }
+    const result = (event.results || []).find(item => item.id === resultId);
+    if (!result || !Array.isArray(result.runnerNames) || result.runnerNames.length < 2) {
+      throw new Error('This relay team has no next runner to transfer to.');
+    }
+    const currentIndex = this.athleticsRelayRunnerIndexes[resultId] || 0;
+    if (currentIndex >= result.runnerNames.length - 1) {
+      throw new Error('This relay team has completed all baton transfers.');
+    }
+    const index = currentIndex + 1;
+    this.athleticsRelayRunnerIndexes[resultId] = index;
+    const complete = index === result.runnerNames.length - 1;
+    this.broadcast({ type: 'ATHLETICS_BATON_TRANSFER', eventId: event.id, resultId, runnerIndex: index, nextRunnerName: result.runnerNames[index], complete });
+    return { runnerIndex: index, nextRunnerName: result.runnerNames[index], complete };
+  }
+
+  setRemoteAthleticsReorderHandler(handler) {
+    this.remoteAthleticsReorderHandler = typeof handler === 'function' ? handler : null;
+  }
+
+  setRemoteAthleticsBatonTransferHandler(handler) {
+    this.remoteAthleticsBatonTransferHandler = typeof handler === 'function' ? handler : null;
   }
 
   // Used by workflows to choose the score animation before the score actually
@@ -651,6 +860,7 @@ class GraphicsEngine extends EventEmitter {
   showTopMessage(data = {}) {
     this.topMessageActive = true;
     this.topMessageData = {
+      ...data,
       title: data.title || 'MESSAGE',
       subtitle: data.subtitle || '',
       badge: data.badge || '',

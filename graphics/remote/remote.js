@@ -23,12 +23,21 @@
   const pendingScoreLabel = document.getElementById('pending-score-label');
   const accessKeyVisibility = document.getElementById('btn-toggle-access-key');
   const scoreModeStatus = document.getElementById('score-mode-status');
+  const athleticsOrderPanel = document.getElementById('athletics-order-panel');
+  const athleticsOrderTitle = document.getElementById('athletics-order-title');
+  const athleticsOrderList = document.getElementById('athletics-order-list');
 
   let socket = null;
   let authenticated = false;
   let blockAutomaticAuth = false;
   let timerMode = null;
   let immediateScore = false;
+  let athleticsStandings = null;
+  let relayRunnerIndexes = {};
+  const relayTransferTimers = new Map();
+  let athleticsReorderPending = false;
+  let remoteRankEventId = null;
+  let remotePreviousPlaces = new Map();
   const pendingScore = { home: 0, away: 0 };
   const currentScore = { home: 0, away: 0 };
 
@@ -138,11 +147,12 @@
   function sendCommand(action, values = {}) {
     if (!authenticated || !socket || socket.readyState !== WebSocket.OPEN) {
       controlFeedback.textContent = 'Remote is disconnected. Reconnect before controlling the match.';
-      return;
+      return false;
     }
     socket.send(JSON.stringify({ type: 'REMOTE_COMMAND', action, ...values }));
     controlFeedback.textContent = action === 'SCORE_ADJUST' ? 'Score update sent.' : '';
     if (action === 'SCORE_PROPOSAL') submitScoreRequest.disabled = true;
+    return true;
   }
 
   function handleMessage(message) {
@@ -153,6 +163,43 @@
       if (message.score && message.score.sets) renderSets(message.score.sets);
       if (message.score && message.score.clock) renderClock(message.score.clock);
       if (message.offense) renderOffense(message.offense);
+      relayRunnerIndexes = { ...(message.athleticsRelayRunnerIndexes || {}) };
+      renderAthleticsStandings(message.athleticsStandings);
+      return;
+    }
+    if (message.type === 'ATHLETICS_STANDINGS_UPDATE') {
+      athleticsReorderPending = false;
+      renderAthleticsStandings(message.standings);
+      return;
+    }
+    if (message.type === 'ATHLETICS_BATON_TRANSFER') {
+      if (message.eventId === athleticsStandings?.event?.id) {
+        const row = athleticsOrderList.querySelector(`[data-result-id="${CSS.escape(message.resultId)}"]`);
+        const arrow = document.createElement('span');
+        arrow.className = 'athletics-order-transfer-arrow';
+        arrow.textContent = `➜ ${message.nextRunnerName || 'NEXT RUNNER'}`;
+        arrow.setAttribute('aria-label', `Baton transferred to ${message.nextRunnerName || 'next runner'}`);
+        row?.appendChild(arrow);
+        clearTimeout(relayTransferTimers.get(message.resultId));
+        const transitionTimer = setTimeout(() => {
+          relayRunnerIndexes[message.resultId] = message.runnerIndex;
+          renderAthleticsStandings(athleticsStandings);
+          const incomingRow = athleticsOrderList.querySelector(`[data-result-id="${CSS.escape(message.resultId)}"]`);
+          incomingRow?.querySelector('.current-runner')?.animate?.(
+            [{ opacity: 0.15, transform: 'translateX(20px)' }, { opacity: 1, transform: 'translateX(0)' }],
+            { duration: 420, easing: 'cubic-bezier(.2,.75,.25,1)' }
+          );
+          if (message.complete) {
+            const button = incomingRow?.querySelector('.athletics-order-transfer');
+            if (button) {
+              button.textContent = 'TEAM FINISHED';
+              button.disabled = true;
+              button.title = 'The final runner has the baton';
+            }
+          }
+        }, 520);
+        relayTransferTimers.set(message.resultId, transitionTimer);
+      }
       return;
     }
     if (message.type === 'REMOTE_SCORE_MODE') {
@@ -206,6 +253,10 @@
       return;
     }
     if (message.type === 'REMOTE_COMMAND_RESULT' && !message.ok) {
+      if (message.action === 'ATHLETICS_REORDER') {
+        athleticsReorderPending = false;
+        renderAthleticsStandings(athleticsStandings);
+      }
       controlFeedback.textContent = message.error || 'Control command failed.';
       if (message.action === 'SCORE_PROPOSAL') renderScorePreview();
     } else if (message.type === 'REMOTE_COMMAND_RESULT' && message.ok) {
@@ -222,8 +273,129 @@
         controlFeedback.textContent = 'Clock start time saved.';
       } else if (message.action === 'CLOCK_SET_PERIOD') {
         controlFeedback.textContent = 'Period label updated.';
+      } else if (message.action === 'ATHLETICS_REORDER') {
+        athleticsReorderPending = false;
+        controlFeedback.textContent = 'Race order updated.';
+      } else if (message.action === 'ATHLETICS_BATON_TRANSFER') {
+        controlFeedback.textContent = 'Baton transfer saved to the Athletics session.';
       }
     }
+  }
+
+  function renderAthleticsStandings(standings) {
+    athleticsStandings = standings || null;
+    const event = standings?.event;
+    const athleticsMode = standings?.active === true;
+    if (athleticsMode) controlFeedback.textContent = '';
+    document.querySelector('.score-panel').hidden = athleticsMode;
+    document.querySelector('.timer-panel').hidden = athleticsMode;
+    document.querySelector('.clock-adjust-panel').hidden = athleticsMode;
+    document.querySelector('.period-adjust-panel').hidden = athleticsMode;
+    setTally.hidden = athleticsMode || !timerMode;
+    const enabled = athleticsMode && !!event;
+    athleticsOrderPanel.hidden = !enabled;
+    athleticsOrderList.replaceChildren();
+    if (!enabled) return;
+    if (event.id !== remoteRankEventId) {
+      remoteRankEventId = event.id;
+      remotePreviousPlaces = new Map();
+    }
+    const canMove = event.category !== 'shot-put' && standings.displayMode !== 'after';
+    const orderHint = event.category === 'shot-put' ? 'Shot Put is ranked by best throw'
+      : standings.displayMode === 'after' ? 'Final order'
+        : 'Tap arrows to move one place';
+    athleticsOrderTitle.textContent = `${standings.displayMode === 'after' ? 'AFTER · ' : ''}${event.name || 'Live event'} · ${orderHint}${event.liveStandings === false && standings.displayMode !== 'after' ? ' · broadcast standings off' : ''}`;
+    const results = [...(event.results || [])].sort((a, b) => a.place - b.place);
+    const houses = new Map((standings.houses || []).map(house => [house.name, house]));
+    const nextPlaces = new Map();
+    results.forEach((result, index) => {
+      const row = document.createElement('div');
+      row.className = 'athletics-order-row';
+      row.dataset.resultId = result.id;
+      const oldPlace = remotePreviousPlaces.get(result.id);
+      const movement = oldPlace === undefined || oldPlace === result.place ? '' : result.place < oldPlace ? 'up' : 'down';
+      nextPlaces.set(result.id, result.place);
+      const rank = document.createElement('div');
+      rank.className = 'athletics-order-rank';
+      const rankValue = document.createElement('strong');
+      rankValue.textContent = String(result.place);
+      rank.appendChild(rankValue);
+      if (movement) {
+        const arrow = document.createElement('span');
+        arrow.className = `athletics-order-movement ${movement}`;
+        arrow.textContent = movement === 'up' ? '↑' : '↓';
+        arrow.title = movement === 'up' ? 'Moved up' : 'Moved down';
+        rank.appendChild(arrow);
+        setTimeout(() => arrow.remove(), 1200);
+      }
+      const house = houses.get(result.team);
+      const color = document.createElement('span');
+      color.className = 'athletics-order-house-color';
+      color.style.backgroundColor = house?.color || '#64748b';
+      color.title = `${result.team || 'House'} color`;
+      color.setAttribute('aria-label', color.title);
+      const athlete = document.createElement('span');
+      const runners = Array.isArray(result.runnerNames) ? result.runnerNames : [];
+      athlete.title = runners.join(' → ') || result.athleteName || 'Athlete';
+      if (event.category === 'relay' && runners.length) {
+        athlete.className = 'athletics-order-athlete relay';
+        const savedRunner = Number.isInteger(result.currentRunnerIndex) ? result.currentRunnerIndex : relayRunnerIndexes[result.id] || 0;
+        relayRunnerIndexes[result.id] = savedRunner;
+        const currentRunner = ((savedRunner % runners.length) + runners.length) % runners.length;
+        runners.forEach((runner, runnerIndex) => {
+          const runnerLabel = document.createElement('span');
+          runnerLabel.className = runnerIndex === currentRunner ? 'current-runner' : '';
+          runnerLabel.textContent = runner;
+          athlete.appendChild(runnerLabel);
+        });
+      } else {
+        athlete.textContent = result.athleteName || 'Athlete';
+      }
+      const team = document.createElement('small');
+      team.textContent = result.team || '';
+      const mark = document.createElement('small');
+      mark.className = 'athletics-order-result';
+      mark.textContent = result.result || '';
+      const controls = document.createElement('div');
+      controls.className = 'athletics-order-actions';
+      controls.hidden = !canMove;
+      row.classList.toggle('readonly', !canMove);
+      for (const [label, delta, title] of [['↑', -1, 'Move up one place'], ['↓', 1, 'Move down one place']]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'athletics-order-move';
+        button.textContent = label;
+        button.title = title;
+        button.setAttribute('aria-label', `${title}: ${athlete.textContent}`);
+        button.disabled = !canMove || athleticsReorderPending || index + delta < 0 || index + delta >= results.length;
+        button.addEventListener('click', () => {
+          if (!athleticsStandings || athleticsReorderPending) return;
+          const ids = results.map(item => item.id);
+          [ids[index], ids[index + delta]] = [ids[index + delta], ids[index]];
+          athleticsReorderPending = true;
+          renderAthleticsStandings(athleticsStandings);
+          if (!sendCommand('ATHLETICS_REORDER', { resultIds: ids })) {
+            athleticsReorderPending = false;
+            renderAthleticsStandings(athleticsStandings);
+          }
+        });
+        controls.appendChild(button);
+      }
+      if (event.category === 'relay' && standings.displayMode !== 'after' && runners.length > 1) {
+        const transfer = document.createElement('button');
+        transfer.type = 'button';
+        transfer.className = 'athletics-order-transfer';
+        const transfersComplete = (Number.isInteger(result.currentRunnerIndex) ? result.currentRunnerIndex : relayRunnerIndexes[result.id] || 0) >= runners.length - 1;
+        transfer.textContent = transfersComplete ? 'TEAM FINISHED' : 'PASS BATON';
+        transfer.disabled = transfersComplete;
+        transfer.title = transfersComplete ? 'The final runner has the baton' : 'Transfer baton to the next runner';
+        transfer.addEventListener('click', () => sendCommand('ATHLETICS_BATON_TRANSFER', { resultId: result.id }));
+        controls.appendChild(transfer);
+      }
+      row.append(rank, color, athlete, team, mark, controls);
+      athleticsOrderList.appendChild(row);
+    });
+    remotePreviousPlaces = nextPlaces;
   }
 
   function renderScore(data) {

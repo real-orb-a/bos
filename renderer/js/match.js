@@ -463,7 +463,7 @@ window.MatchModule = (function() {
       btnToggleScreenCenterScorebug.getAttribute('aria-pressed') === 'true';
     btnToggleScorebug.setAttribute('aria-pressed', String(!!visible));
     btnToggleScorebug.disabled = centerVisible;
-    btnToggleScorebug.textContent = visible ? 'FADE SCORE BUG OUT' : 'FADE SCORE BUG IN';
+    btnToggleScorebug.textContent = `FADE SCOREBUG ${visible ? 'OUT' : 'IN'}`;
     if (centerVisible) {
       btnToggleScorebug.classList.add('locked');
     } else {
@@ -474,11 +474,26 @@ window.MatchModule = (function() {
   function updateScreenCenterScorebugButton(visible) {
     btnToggleScreenCenterScorebug.setAttribute('aria-pressed', String(!!visible));
     btnToggleScreenCenterScorebug.textContent = visible
-      ? 'FADE CENTER SCOREBUG OUT'
-      : 'FADE CENTER SCOREBUG IN';
+      ? 'HIDE CENTER SCOREBUG'
+      : 'SHOW CENTER SCOREBUG';
+    const sessionExpandButton = document.getElementById('session-scorebug-toggle');
+    if (sessionExpandButton) {
+      sessionExpandButton.disabled = !!visible;
+      sessionExpandButton.title = visible
+        ? 'Collapse the center scorebug before changing scorebug size.'
+        : '';
+      sessionExpandButton.classList.toggle('locked', !!visible);
+    }
   }
 
   function listenIpc() {
+    window.bosAPI.graphics.onScorebugVisibilityChanged(visible => {
+      updateScorebugButton(visible);
+    });
+    window.bosAPI.graphics.onScreenCenterScorebugChanged(visible => {
+      updateScreenCenterScorebugButton(visible);
+      updateScorebugButton(visible ? false : btnToggleScorebug.getAttribute('aria-pressed') === 'true');
+    });
     window.bosAPI.score.onChanged((data) => {
       updateScoreUI(data.state);
     });

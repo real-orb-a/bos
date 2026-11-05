@@ -291,11 +291,12 @@ if (relayBroadcast.event.name !== 'Baton Relay Level 05 Boys' ||
       result.runnerNames.join(' → ') === 'Runner One → Runner Two → Runner Three → Runner Four')) {
   throw new Error('Relay runner order was not preserved for broadcast.');
 }
-athleticsSession.setAthleticsPodiumVisible(true);
+athleticsSession.setAthleticsDisplayMode('after');
 const podiumBroadcast = athleticsSession.getAthleticsBroadcastState();
-if (!podiumBroadcast.podiumVisible) {
-  throw new Error('Athletics podium visibility was not enabled for broadcast.');
+if (podiumBroadcast.displayMode !== 'after') {
+  throw new Error('Athletics After view was not enabled for broadcast.');
 }
+athleticsSession.setAthleticsDisplayMode('live');
 const relayEntry = athleticsSession.getActiveSession().athletics.currentEvent.results.find(result => result.runnerNames.length);
 athleticsSession.removeAthleticsResult(relayEntry.id);
 if (athleticsSession.getAthleticsBroadcastState().event.results.some(result => result.runnerNames.length)) {
@@ -460,8 +461,8 @@ console.log('✓ Scorebug compact/expanded state is controllable.');
 graphics.setAthleticsStandings(podiumBroadcast);
 if (!graphics.athleticsStandings.active ||
     graphics.athleticsStandings.event.name !== 'Baton Relay Level 05 Boys' ||
-    graphics.athleticsStandings.podiumVisible !== true) {
-  throw new Error('GraphicsEngine did not publish the live Athletics podium state.');
+    graphics.athleticsStandings.displayMode !== 'after') {
+  throw new Error('GraphicsEngine did not publish the Athletics After view.');
 }
 graphics.setAthleticsStandings({ active: false, event: null, houses: [] });
 console.log('✓ Athletics event standings can replace and clear the scorebug graphic.');

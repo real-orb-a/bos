@@ -23,6 +23,7 @@ function registerIpcHandlers({
       mainWindow.webContents.send(channel, ...args);
     }
   };
+  const graphicsSessionName = session => session.competition.name;
 
   ipcMain.handle('teams:getCatalog', () => loadTeamCatalog());
   ipcMain.handle('session:getState', () => sessionManager.getState());
@@ -30,25 +31,36 @@ function registerIpcHandlers({
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       throw new Error('Session details are required.');
     }
-    const teams = loadTeamCatalog();
-    const findTeam = id => teams.find(team => team.id === id);
-    const homeTeam = data.mode === 'athletics' ? null : findTeam(data.homeTeamId);
-    const awayTeam = data.mode === 'athletics' ? null : findTeam(data.awayTeamId);
-    if (data.mode !== 'athletics' && data.mode !== 'formal-event' && (!homeTeam || !awayTeam)) {
-      throw new Error('Choose both teams from the configured team catalog.');
-    }
-    if (homeTeam && awayTeam && homeTeam.id === awayTeam.id) {
+    const teams = loadTeamCatalog().filter(team => team.active !== false);
+    const resolveTeam = side => {
+      const submitted = data[`${side}Team`];
+      const submittedId = data[`${side}TeamId`];
+      if (submittedId) {
+        const configured = teams.find(team => team.id === submittedId);
+        if (!configured) throw new Error(`Choose a configured ${side} team.`);
+        return configured;
+      }
+      const name = typeof submitted === 'string' ? submitted.trim()
+        : typeof submitted?.name === 'string' ? submitted.name.trim() : '';
+      const configured = teams.find(team => team.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      if (configured) return configured;
+      throw new Error(`Choose an active ${side} house from the shared team catalog.`);
+    };
+    const homeTeam = data.mode === 'athletics' ? null : resolveTeam('home');
+    const awayTeam = data.mode === 'athletics' ? null : resolveTeam('away');
+    if (homeTeam && awayTeam && homeTeam.name.toLocaleLowerCase() === awayTeam.name.toLocaleLowerCase()) {
       throw new Error('Choose two different teams.');
     }
     const session = sessionManager.create({
       ...data,
-      homeTeam: homeTeam?.name,
-      awayTeam: awayTeam?.name,
+      homeTeam,
+      awayTeam,
       homeTeamBrand: homeTeam,
       awayTeamBrand: awayTeam,
-      athleticsHouses: data.mode === 'athletics' ? teams : undefined
+      athleticsHouses: data.mode === 'athletics' ? teams : undefined,
+      athleticsEvents: data.mode === 'athletics' ? data.athleticsEvents : undefined
     });
-    graphicsEngine.setScorebugMatchName(session.competition.name);
+    graphicsEngine.setScorebugMatchName(graphicsSessionName(session));
     if (session.teams) {
       const currentTeams = scoreManager.getScore();
       const scoreTeam = team => ({
@@ -77,16 +89,18 @@ function registerIpcHandlers({
       volleyball: { mode: 'none', minutes: 90, period: 'Set 1' },
       'table-tennis': { mode: 'none', minutes: 90, period: 'Game 1' },
       badminton: { mode: 'none', minutes: 90, period: 'Game 1' },
-      athletics: { mode: 'stopwatch', minutes: 90, period: 'Event' },
-      'formal-event': { mode: 'none', minutes: 90, period: 'Programme' }
+      athletics: { mode: 'none', minutes: 90, period: 'Event' }
     }[session.modeId];
     matchEngine.setTimerMode(clockConfig.mode);
     matchEngine.setClock({ regulationMinutes: clockConfig.minutes });
     matchEngine.setStartTime(clockConfig.mode === 'countdown' ? clockConfig.minutes * 60 : 0);
     matchEngine.setPeriod(clockConfig.period);
     if (obsClient.getStatus().stream.active) sessionManager.updateStatus('LIVE');
-    graphicsEngine.setScorebugVisible(!['athletics', 'formal-event'].includes(session.modeId));
-    graphicsEngine.setScorebugExpanded(false);
+    if (session.modeId === 'athletics') graphicsEngine.resetAthleticsScorebug();
+    else {
+      graphicsEngine.setScorebugVisible(true);
+      graphicsEngine.setScorebugExpanded(false);
+    }
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
     graphicsEngine.setSportScorebugState(session);
     return session;
@@ -94,9 +108,11 @@ function registerIpcHandlers({
   ipcMain.handle('session:activate', () => sessionManager.activate());
   ipcMain.handle('session:resume', () => {
     const session = sessionManager.resume();
-    graphicsEngine.setScorebugVisible(!['athletics', 'formal-event'].includes(session.modeId));
+    if (session.modeId === 'athletics') graphicsEngine.resetAthleticsScorebug();
+    else graphicsEngine.setScorebugVisible(true);
+    if (session.modeId !== 'athletics') graphicsEngine.setScorebugExpanded(false);
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
-    graphicsEngine.setScorebugMatchName(session.competition.name);
+    graphicsEngine.setScorebugMatchName(graphicsSessionName(session));
     graphicsEngine.setSportScorebugState(session);
     return session;
   });
@@ -113,7 +129,7 @@ function registerIpcHandlers({
   ipcMain.handle('session:addParticipant', (_, input) => sessionManager.addParticipant(input));
   ipcMain.handle('session:updateCompetitionName', (_, name) => {
     const session = sessionManager.updateCompetitionName(name);
-    graphicsEngine.setScorebugMatchName(session.competition.name);
+    graphicsEngine.setScorebugMatchName(graphicsSessionName(session));
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
     return session;
   });
@@ -138,16 +154,32 @@ function registerIpcHandlers({
   });
   ipcMain.handle('session:setAthleticsEvent', (_, input) => {
     const session = sessionManager.setAthleticsEvent(input);
+    graphicsEngine.setScorebugMatchName(graphicsSessionName(session));
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
     return session;
   });
-  ipcMain.handle('session:setAthleticsPodiumVisible', (_, visible) => {
-    const session = sessionManager.setAthleticsPodiumVisible(visible);
+  ipcMain.handle('session:setAthleticsDisplayMode', (_, mode) => {
+    const session = sessionManager.setAthleticsDisplayMode(mode);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:setAthleticsLiveStandings', (_, enabled) => {
+    const session = sessionManager.setAthleticsLiveStandings(enabled);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:reorderAthleticsResults', (_, resultIds) => {
+    const session = sessionManager.reorderAthleticsResults(resultIds);
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
     return session;
   });
   ipcMain.handle('session:recordAthleticsResult', (_, input) => {
     const session = sessionManager.recordAthleticsResult(input);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:updateAthleticsResult', (_, input) => {
+    const session = sessionManager.updateAthleticsResult(input);
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
     return session;
   });
@@ -164,6 +196,11 @@ function registerIpcHandlers({
   });
   ipcMain.handle('session:setAthleticsHouseLogo', (_, { houseId, dataUrl }) => {
     const session = sessionManager.setAthleticsHouseLogo(houseId, dataUrl);
+    graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+    return session;
+  });
+  ipcMain.handle('session:setAthleticsHouseRunners', (_, { houseId, runners }) => {
+    const session = sessionManager.setAthleticsHouseRunners(houseId, runners);
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
     return session;
   });
@@ -191,6 +228,15 @@ function registerIpcHandlers({
   replayEngine.on('replayStateChanged', (status) => sendToRenderer('replay:stateChanged', status));
 
   graphicsEngine.on('queueUpdated', (q) => sendToRenderer('graphics:queueUpdated', q));
+  graphicsEngine.on('screenCenterScorebugChanged', visible =>
+    sendToRenderer('graphics:screenCenterScorebugChanged', visible)
+  );
+  graphicsEngine.on('scorebugVisibilityChanged', visible =>
+    sendToRenderer('graphics:scorebugVisibilityChanged', visible)
+  );
+  graphicsEngine.on('serverStatusChanged', status =>
+    sendToRenderer('graphics:serverStatusChanged', status)
+  );
   graphicsEngine.on('remoteScoreProposalsChanged', (proposals) =>
     sendToRenderer('graphics:remoteScoreProposalsChanged', proposals)
   );
@@ -305,10 +351,14 @@ function registerIpcHandlers({
   );
   ipcMain.handle('graphics:triggerTransition', (_, data) => graphicsEngine.triggerTransition(data));
   ipcMain.handle('graphics:getScorebugVisible', () => graphicsEngine.scorebugVisible);
+  ipcMain.handle('graphics:getServerStatus', () => graphicsEngine.getServerStatus());
+  ipcMain.handle('graphics:setServerPort', (_, port) => graphicsEngine.setServerPort(port));
   ipcMain.handle('graphics:setScorebugVisible', (_, visible) => graphicsEngine.setScorebugVisible(visible));
   ipcMain.handle('graphics:setScorebugExpanded', (_, expanded) =>
     graphicsEngine.setScorebugExpanded(expanded)
   );
+  ipcMain.handle('graphics:setAthleticsRelayMode', (_, mode) => graphicsEngine.setAthleticsRelayMode(mode));
+  ipcMain.handle('graphics:transferAthleticsBaton', (_, resultId) => graphicsEngine.transferAthleticsBaton(resultId));
   ipcMain.handle('graphics:getScreenCenterScorebugVisible', () =>
     graphicsEngine.screenCenterScorebugVisible
   );

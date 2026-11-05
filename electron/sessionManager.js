@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const EventEmitter = require('events');
+const loadTeamCatalog = require('./teamCatalog');
 
 const SESSION_MODES = new Set([
   'football',
@@ -11,18 +12,25 @@ const SESSION_MODES = new Set([
   'volleyball',
   'table-tennis',
   'badminton',
-  'athletics',
-  'formal-event'
+  'athletics'
 ]);
 
 const SESSION_STATES = new Set(['SETUP', 'READY', 'LIVE', 'PAUSED', 'ENDED']);
 const ATHLETICS_CATEGORY_ALIASES = { track: 'running', field: 'shot-put' };
 const normalizeAthleticsCategory = category => ATHLETICS_CATEGORY_ALIASES[category] || category;
+const defaultPlayerShortCode = name => String(name || '').replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 3) || 'PLY';
+const defaultAthleteShortCode = name => {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  return parts.length > 1
+    ? (parts.map(part => part[0]).join('').replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() || 'ATH')
+    : ((parts[0] || '').replace(/[^a-z0-9]/gi, '').slice(0, 3).toUpperCase() || 'ATH');
+};
 
 class SessionManager extends EventEmitter {
   constructor(filePath) {
     super();
     this.filePath = filePath;
+    this.sessionsDirectory = path.join(path.dirname(filePath), 'sessions');
     this.activeSession = null;
     this.snapshotTimer = null;
     this._load();
@@ -47,68 +55,191 @@ class SessionManager extends EventEmitter {
           away: { id: crypto.randomUUID(), name: session.teams.away, shortName: '', logo: '', primaryColor: '#eab308', secondaryColor: '#713f12' }
         };
       }
+      let savedHouses = [];
+      try { savedHouses = loadTeamCatalog(); } catch { /* Keep saved identities if the catalog is unavailable. */ }
+      if (session.teams && typeof session.teams === 'object') {
+        for (const side of ['home', 'away']) {
+          const team = session.teams[side];
+          const house = savedHouses.find(item => item.id === team?.id) ||
+            savedHouses.find(item => item.name.toLocaleLowerCase() === String(team?.name || '').toLocaleLowerCase());
+          if (!team || !house) continue;
+          session.teams[side] = {
+            ...team,
+            id: house.id,
+            name: house.name,
+            shortName: house.shortName || team.shortName || house.name.slice(0, 3).toUpperCase(),
+            primaryColor: house.primaryColor,
+            secondaryColor: house.secondaryColor,
+            logo: house.logo
+          };
+        }
+      }
       session.participants = Array.isArray(session.participants) ? session.participants : [];
+      const savedRacketMatch = session.sportState?.racketMatch || session.sportState?.tableTennis;
       session.sportState = session.sportState && typeof session.sportState === 'object'
         ? { ...this._initialSportState(session.modeId), ...session.sportState }
         : this._initialSportState(session.modeId);
-      if (session.modeId === 'table-tennis') {
-        const tableTennis = session.sportState.tableTennis;
-        const validPlayers = value => value && typeof value === 'object' &&
-          ['singles', 'doubles'].includes(value.format) &&
-          ['home', 'away'].every(side => {
-            const names = value.players?.[side];
-            const expectedCount = value.format === 'doubles' ? 2 : 1;
-            return Array.isArray(names) && names.length === expectedCount &&
-              names.every(name => typeof name === 'string' && name.trim().length > 0 && name.length <= 32);
-          });
-        session.sportState.tableTennis = validPlayers(tableTennis)
-          ? tableTennis
+      if (['table-tennis', 'badminton'].includes(session.modeId)) {
+        const racketMatch = savedRacketMatch || session.sportState.racketMatch;
+        const normalizeSavedPlayer = player => {
+          const name = typeof player === 'string' ? player.trim()
+            : typeof player?.name === 'string' ? player.name.trim() : '';
+          const shortCode = typeof player === 'object' && typeof player?.shortCode === 'string'
+            ? player.shortCode.trim().toUpperCase() : defaultPlayerShortCode(name);
+          return name && name.length <= 32 && /^[A-Z0-9]{1,3}$/.test(shortCode)
+            ? { name, shortCode } : null;
+        };
+        const normalizedPlayers = racketMatch && typeof racketMatch === 'object' &&
+          ['singles', 'doubles'].includes(racketMatch.format)
+          ? Object.fromEntries(['home', 'away'].map(side => {
+            const raw = racketMatch.players?.[side];
+            const players = Array.isArray(raw) ? raw.map(normalizeSavedPlayer) : [];
+            return [side, players.every(Boolean) ? players : null];
+          })) : null;
+        const expectedCount = racketMatch?.format === 'doubles' ? 2 : 1;
+        const validRacketMatch = normalizedPlayers && ['home', 'away'].every(side =>
+          normalizedPlayers[side]?.length === expectedCount);
+        session.sportState.racketMatch = validRacketMatch
+          ? { format: racketMatch.format, players: normalizedPlayers }
           : {
             format: 'singles',
             players: {
-              home: [session.teams?.home?.name || 'Home'],
-              away: [session.teams?.away?.name || 'Away']
+              home: [{
+                name: session.teams?.home?.name || 'Home',
+                shortCode: defaultPlayerShortCode(session.teams?.home?.name || 'Home')
+              }],
+              away: [{
+                name: session.teams?.away?.name || 'Away',
+                shortCode: defaultPlayerShortCode(session.teams?.away?.name || 'Away')
+              }]
             }
           };
+        if (session.modeId === 'table-tennis') {
+          session.sportState.tableTennis = {
+            format: session.sportState.racketMatch.format,
+            players: Object.fromEntries(['home', 'away'].map(side => [
+              side, session.sportState.racketMatch.players[side].map(player => player.name)
+            ]))
+          };
+        }
       }
+      const athleticsHouseIdMap = new Map();
+      const normalizeAthleticsHouse = savedHouse => {
+        const house = savedHouses.find(item => item.id === savedHouse.id) ||
+          savedHouses.find(item => item.name.toLocaleLowerCase() === String(savedHouse.name || '').toLocaleLowerCase());
+        if (!house) return savedHouse;
+        if (savedHouse.id && savedHouse.id !== house.id) athleticsHouseIdMap.set(savedHouse.id, house.id);
+        return {
+          ...savedHouse,
+          id: house.id,
+          name: house.name,
+          shortName: house.shortName,
+          color: house.primaryColor,
+          logo: house.logo
+        };
+      };
+      const normalizeAthleteAssignments = athletes => {
+        if (!athletes || typeof athletes !== 'object' || Array.isArray(athletes)) return {};
+        const remapped = { ...athletes };
+        for (const [oldId, newId] of athleticsHouseIdMap) {
+          if (!(oldId in remapped)) continue;
+          remapped[newId] = [...(Array.isArray(remapped[newId]) ? remapped[newId] : []),
+            ...(Array.isArray(remapped[oldId]) ? remapped[oldId] : [])];
+          delete remapped[oldId];
+        }
+        return remapped;
+      };
+      const normalizeAthleteShortCodes = (codes, athletes) => {
+        const remapped = codes && typeof codes === 'object' && !Array.isArray(codes) ? { ...codes } : {};
+        for (const [oldId, newId] of athleticsHouseIdMap) {
+          if (!(oldId in remapped)) continue;
+          remapped[newId] = { ...(remapped[oldId] || {}), ...(remapped[newId] || {}) };
+          delete remapped[oldId];
+        }
+        for (const [houseId, names] of Object.entries(athletes || {})) {
+          if (!Array.isArray(names)) continue;
+          const houseCodes = { ...(remapped[houseId] || {}) };
+          const used = new Set();
+          for (const name of names) {
+            let code = typeof houseCodes[name] === 'string' ? houseCodes[name].trim().toUpperCase() : '';
+            if (!/^[A-Z0-9]{1,4}$/.test(code) || used.has(code)) {
+              const base = defaultAthleteShortCode(name);
+              code = base;
+              const prefix = base.slice(0, 2).padEnd(2, 'X');
+              for (let suffix = 1; used.has(code) && suffix < 1296; suffix++) {
+                code = `${prefix}${suffix.toString(36).toUpperCase().padStart(2, '0')}`;
+              }
+            }
+            used.add(code);
+            houseCodes[name] = code;
+          }
+          remapped[houseId] = houseCodes;
+        }
+        return remapped;
+      };
+      const normalizeSavedAthleticsEvent = event => {
+        const athletes = normalizeAthleteAssignments(event.athletes);
+        return {
+          ...event,
+          category: normalizeAthleticsCategory(event.category),
+          resultRequired: event.resultRequired !== false,
+          liveStandings: event.liveStandings !== false,
+          athletes,
+          athleteShortCodes: normalizeAthleteShortCodes(event.athleteShortCodes, athletes)
+        };
+      };
       session.athletics = session.modeId === 'athletics'
         ? {
-          houses: Array.isArray(session.athletics?.houses) ? session.athletics.houses : [
+          houses: (Array.isArray(session.athletics?.houses) ? session.athletics.houses : [
             { id: crypto.randomUUID(), name: 'Garnet', logo: '', color: '#e11d48' },
             { id: crypto.randomUUID(), name: 'Emerald', logo: '', color: '#10b981' },
             { id: crypto.randomUUID(), name: 'Topaz', logo: '', color: '#eab308' }
-          ],
+          ]).map(normalizeAthleticsHouse),
+          events: Array.isArray(session.athletics?.events)
+            ? session.athletics.events.map(normalizeSavedAthleticsEvent)
+            : Array.isArray(session.athletics?.schedule) ? session.athletics.schedule.map(normalizeSavedAthleticsEvent) : [],
           currentEvent: (() => {
             if (session.athletics?.currentEvent) {
+              const currentEvent = session.athletics.currentEvent;
+              const athletes = normalizeAthleteAssignments(currentEvent.athletes);
               return {
-                ...session.athletics.currentEvent,
-                category: normalizeAthleticsCategory(session.athletics.currentEvent.category),
-                results: Array.isArray(session.athletics.currentEvent.results)
-                  ? session.athletics.currentEvent.results : []
+                ...currentEvent,
+                category: normalizeAthleticsCategory(currentEvent.category),
+                resultRequired: currentEvent.resultRequired !== false,
+                liveStandings: currentEvent.liveStandings !== false,
+                athletes,
+                athleteShortCodes: normalizeAthleteShortCodes(currentEvent.athleteShortCodes, athletes),
+                results: Array.isArray(currentEvent.results) ? currentEvent.results : []
               };
             }
             const legacyEvents = Array.isArray(session.athletics?.schedule) ? session.athletics.schedule : [];
             const legacyEvent = legacyEvents.find(event => event.id === session.athletics?.activeEventId) ||
               legacyEvents[0];
             return legacyEvent
-              ? {
-                ...legacyEvent,
-                category: normalizeAthleticsCategory(legacyEvent.category),
-                results: Array.isArray(legacyEvent.results) ? legacyEvent.results : []
-              }
+              ? { ...normalizeSavedAthleticsEvent(legacyEvent), results: Array.isArray(legacyEvent.results) ? legacyEvent.results : [] }
               : null;
           })(),
           results: Array.isArray(session.athletics?.results) ? session.athletics.results : [],
-          podiumVisible: session.athletics?.podiumVisible === true
+          displayMode: session.athletics?.displayMode === 'after' ? 'after' : 'live'
         }
         : null;
       this.activeSession = saved.activeSession;
+      this._persist();
     }
   }
 
   _persist() {
     const directory = path.dirname(this.filePath);
     fs.mkdirSync(directory, { recursive: true });
+    if (this.activeSession) {
+      fs.mkdirSync(this.sessionsDirectory, { recursive: true });
+      const safeId = String(this.activeSession.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!safeId) throw new Error('Cannot save a session without a valid ID.');
+      const sessionPath = path.join(this.sessionsDirectory, `${safeId}.json`);
+      const sessionTemporaryPath = `${sessionPath}.tmp`;
+      fs.writeFileSync(sessionTemporaryPath, JSON.stringify(this.activeSession, null, 2), 'utf8');
+      fs.renameSync(sessionTemporaryPath, sessionPath);
+    }
     const temporaryPath = `${this.filePath}.tmp`;
     fs.writeFileSync(temporaryPath, JSON.stringify({ activeSession: this.activeSession }, null, 2), 'utf8');
     fs.renameSync(temporaryPath, this.filePath);
@@ -146,13 +277,6 @@ class SessionManager extends EventEmitter {
     };
 
     const mode = data.mode;
-    const housePalette = {
-      garnet: { primaryColor: '#e11d48', secondaryColor: '#7f1d1d' },
-      emerald: { primaryColor: '#10b981', secondaryColor: '#064e3b' },
-      topaz: { primaryColor: '#eab308', secondaryColor: '#713f12' }
-    };
-    const teamColors = (name, fallback) =>
-      housePalette[name.toLocaleLowerCase()] || fallback;
     const competition = {
       id: crypto.randomUUID(),
       name: text(data.competitionName, 'Competition name', 60, true),
@@ -162,26 +286,35 @@ class SessionManager extends EventEmitter {
       venue: text(data.venue, 'Venue', 100),
       date: text(data.date, 'Date', 32)
     };
-    let tableTennis = null;
-    if (mode === 'table-tennis') {
-      const format = data.tableTennisFormat;
+    let racketMatch = null;
+    if (['table-tennis', 'badminton'].includes(mode)) {
+      const format = data.racketFormat || data.tableTennisFormat;
       if (!['singles', 'doubles'].includes(format)) {
-        throw new Error('Choose table tennis singles (1v1) or doubles (2v2).');
+        throw new Error(`Choose ${mode === 'badminton' ? 'badminton' : 'table tennis'} singles or doubles.`);
       }
       const playerCount = format === 'doubles' ? 2 : 1;
-      if (!data.tableTennisPlayers || typeof data.tableTennisPlayers !== 'object') {
-        throw new Error('Enter the table tennis player names.');
+      const submittedPlayers = data.racketPlayers || data.tableTennisPlayers;
+      if (!submittedPlayers || typeof submittedPlayers !== 'object') {
+        throw new Error(`Enter the ${mode === 'badminton' ? 'badminton' : 'table tennis'} player names.`);
       }
       const players = {};
       for (const side of ['home', 'away']) {
-        const names = data.tableTennisPlayers[side];
+        const names = submittedPlayers[side];
         if (!Array.isArray(names) || names.length !== playerCount) {
           throw new Error(`Enter ${playerCount} ${format === 'singles' ? 'player' : 'players'} for the ${side} side.`);
         }
-        players[side] = names.map((name, index) =>
-          text(name, `${side === 'home' ? 'Home' : 'Away'} player ${index + 1}`, 32, true));
+        players[side] = names.map((player, index) => {
+          const label = `${side === 'home' ? 'Home' : 'Away'} player ${index + 1}`;
+          const name = text(typeof player === 'string' ? player : player?.name, label, 32, true);
+          const shortCode = text(typeof player === 'string' ? defaultPlayerShortCode(name) : player?.shortCode,
+            `${label} shortcode`, 3, true).toUpperCase();
+          if (!/^[A-Z0-9]{1,3}$/.test(shortCode)) {
+            throw new Error(`${label} shortcode must be 1 to 3 letters or numbers.`);
+          }
+          return { name, shortCode };
+        });
       }
-      tableTennis = { format, players };
+      racketMatch = { format, players };
     }
     if (competition.date) {
       const parsedDate = Date.parse(`${competition.date}T00:00:00Z`);
@@ -191,45 +324,102 @@ class SessionManager extends EventEmitter {
         throw new Error('Date must be a valid calendar date.');
       }
     }
-    const homeTeamName = mode === 'formal-event' || mode === 'athletics'
-      ? '' : text(data.homeTeam, 'Home team', 60, true);
-    const awayTeamName = mode === 'formal-event' || mode === 'athletics'
-      ? '' : text(data.awayTeam, 'Away team', 60, true);
-    const teams = mode === 'formal-event' || mode === 'athletics' ? null : {
+    const homeTeamInput = data.homeTeam || {};
+    const awayTeamInput = data.awayTeam || {};
+    const homeTeamName = mode === 'athletics'
+      ? '' : text(homeTeamInput.name, 'Home team', 60, true);
+    const awayTeamName = mode === 'athletics'
+      ? '' : text(awayTeamInput.name, 'Away team', 60, true);
+    const teams = mode === 'athletics' ? null : {
       home: {
-        id: crypto.randomUUID(),
-        name: text(data.homeTeamBrand?.name || homeTeamName, 'Home team', 60, true),
-        shortName: text(data.homeTeamBrand?.shortName, 'Home team short name', 12),
-        logo: typeof data.homeTeamBrand?.logo === 'string' ? data.homeTeamBrand.logo : '',
-        ...teamColors(homeTeamName, {
-          primaryColor: '#e11d48',
-          secondaryColor: '#7f1d1d'
-        }),
-        ...(data.homeTeamBrand?.primaryColor ? {
-          primaryColor: data.homeTeamBrand.primaryColor,
-          secondaryColor: data.homeTeamBrand.secondaryColor
-        } : {})
+        id: typeof homeTeamInput.id === 'string' && homeTeamInput.id ? homeTeamInput.id : crypto.randomUUID(),
+        name: homeTeamName || 'HOME',
+        shortName: typeof homeTeamInput.shortName === 'string' && homeTeamInput.shortName.trim()
+          ? homeTeamInput.shortName.trim().slice(0, 12) : homeTeamName?.slice(0, 3).toUpperCase() || 'HOM',
+        logo: typeof homeTeamInput.logo === 'string' ? homeTeamInput.logo : '',
+        primaryColor: /^#[0-9a-f]{6}$/i.test(homeTeamInput.primaryColor || homeTeamInput.color || '')
+          ? (homeTeamInput.primaryColor || homeTeamInput.color) : '#e11d48',
+        secondaryColor: /^#[0-9a-f]{6}$/i.test(homeTeamInput.secondaryColor || '') ? homeTeamInput.secondaryColor : '#7f1d1d'
       },
       away: {
-        id: crypto.randomUUID(),
-        name: text(data.awayTeamBrand?.name || awayTeamName, 'Away team', 60, true),
-        shortName: text(data.awayTeamBrand?.shortName, 'Away team short name', 12),
-        logo: typeof data.awayTeamBrand?.logo === 'string' ? data.awayTeamBrand.logo : '',
-        ...teamColors(awayTeamName, {
-          primaryColor: '#eab308',
-          secondaryColor: '#713f12'
-        }),
-        ...(data.awayTeamBrand?.primaryColor ? {
-          primaryColor: data.awayTeamBrand.primaryColor,
-          secondaryColor: data.awayTeamBrand.secondaryColor
-        } : {})
+        id: typeof awayTeamInput.id === 'string' && awayTeamInput.id ? awayTeamInput.id : crypto.randomUUID(),
+        name: awayTeamName || 'AWAY',
+        shortName: typeof awayTeamInput.shortName === 'string' && awayTeamInput.shortName.trim()
+          ? awayTeamInput.shortName.trim().slice(0, 12) : awayTeamName?.slice(0, 3).toUpperCase() || 'AWY',
+        logo: typeof awayTeamInput.logo === 'string' ? awayTeamInput.logo : '',
+        primaryColor: /^#[0-9a-f]{6}$/i.test(awayTeamInput.primaryColor || awayTeamInput.color || '')
+          ? (awayTeamInput.primaryColor || awayTeamInput.color) : '#eab308',
+        secondaryColor: /^#[0-9a-f]{6}$/i.test(awayTeamInput.secondaryColor || '') ? awayTeamInput.secondaryColor : '#713f12'
       }
     };
 
+    const athleticsHouses = mode === 'athletics'
+      ? (Array.isArray(data.athleticsHouses) ? data.athleticsHouses.map(house => ({
+        id: house.id,
+        name: text(house.name, 'House name', 60, true),
+        logo: typeof house.logo === 'string' ? house.logo : '',
+        color: /^#[0-9a-f]{6}$/i.test(house.primaryColor || '') ? house.primaryColor : '#64748b',
+        shortName: house.shortName || '',
+        runners: []
+      })) : [])
+      : null;
+    if (mode === 'athletics' && (!athleticsHouses || athleticsHouses.length < 2)) {
+      throw new Error('An Athletics session needs at least two active houses.');
+    }
+    const athleticsEvents = mode === 'athletics'
+      ? (Array.isArray(data.athleticsEvents) ? data.athleticsEvents.map((event, index) => {
+        const category = normalizeAthleticsCategory(event.category);
+        if (!['running', 'shot-put', 'relay'].includes(category)) {
+          throw new Error(`Event "${event.name || index + 1}" has an unsupported athletics type.`);
+        }
+        const eventName = text(event.name, 'Event name', 100, true);
+        if (!event.athletes || typeof event.athletes !== 'object' || Array.isArray(event.athletes)) {
+          throw new Error(`Event "${eventName}" is missing its athlete assignments.`);
+        }
+        const assignments = {};
+        const shortCodeAssignments = {};
+        for (const [houseId, rawNames] of Object.entries(event.athletes)) {
+          if (!athleticsHouses.some(house => house.id === houseId)) {
+            throw new Error(`Event "${eventName}" contains an unknown house assignment.`);
+          }
+          if (!Array.isArray(rawNames)) throw new Error(`Athletes for ${eventName} must be a list.`);
+          const names = rawNames.map(name => text(name, 'Athlete name', 80, true));
+          const maxNames = category === 'relay' ? 8 : 32;
+          if (names.length > maxNames) throw new Error(`A house can have at most ${maxNames} athletes in "${eventName}".`);
+          if (new Set(names.map(name => name.toLocaleLowerCase())).size !== names.length) {
+            throw new Error(`Remove duplicate athlete names from ${eventName}.`);
+          }
+          if (category === 'relay' && names.length > 0 && names.length < 2) {
+            throw new Error(`Relay teams need at least 2 runners in "${eventName}".`);
+          }
+          if (names.length) assignments[houseId] = names;
+          if (names.length) {
+            const suppliedCodes = event.athleteShortCodes?.[houseId] || {};
+            const codes = names.map(name => {
+              const supplied = typeof suppliedCodes[name] === 'string' ? suppliedCodes[name].trim().toUpperCase() : '';
+              const code = supplied || defaultAthleteShortCode(name);
+              if (!/^[A-Z0-9]{1,4}$/.test(code)) throw new Error(`Athlete shortcode for ${name} must contain 1 to 4 letters or numbers.`);
+              return code;
+            });
+            if (new Set(codes).size !== codes.length) throw new Error(`Athlete shortcodes must be unique within ${athleticsHouses.find(house => house.id === houseId)?.name || 'each house'} in "${eventName}".`);
+            shortCodeAssignments[houseId] = Object.fromEntries(names.map((name, index) => [name, codes[index]]));
+          }
+        }
+        if (!Object.values(assignments).some(names => names.length > 0)) {
+          throw new Error(`Event "${eventName}" needs at least one athlete assigned.`);
+        }
+        return {
+          id: text(event.id, 'Event ID', 100, true), name: eventName, category, athletes: assignments,
+          athleteShortCodes: shortCodeAssignments,
+          resultRequired: category === 'shot-put' || event.resultRequired !== false,
+          liveStandings: event.liveStandings !== false
+        };
+      }) : [])
+      : null;
     this.activeSession = {
       id: crypto.randomUUID(),
-      mode: mode === 'formal-event' ? 'event' : 'sport',
-      sportId: mode === 'formal-event' ? null : mode,
+      mode: 'sport',
+      sportId: mode,
       modeId: mode,
       status: 'SETUP',
       competition,
@@ -237,25 +427,25 @@ class SessionManager extends EventEmitter {
       participantIds: [],
       sportState: {
         ...this._initialSportState(mode),
-        ...(tableTennis ? { tableTennis } : {})
+        ...(racketMatch ? {
+          racketMatch,
+          ...(mode === 'table-tennis' ? {
+            tableTennis: {
+              format: racketMatch.format,
+              players: Object.fromEntries(['home', 'away'].map(side => [
+                side, racketMatch.players[side].map(player => player.name)
+              ]))
+            }
+          } : {})
+        } : {})
       },
       participants: [],
       athletics: mode === 'athletics' ? {
-        houses: Array.isArray(data.athleticsHouses) && data.athleticsHouses.length
-          ? data.athleticsHouses.map(house => ({
-            id: crypto.randomUUID(),
-            name: text(house.name, 'House name', 60, true),
-            logo: typeof house.logo === 'string' ? house.logo : '',
-            color: /^#[0-9a-f]{6}$/i.test(house.primaryColor || '') ? house.primaryColor : '#64748b'
-          }))
-          : [
-          { id: crypto.randomUUID(), name: 'Garnet', logo: '', color: '#e11d48' },
-          { id: crypto.randomUUID(), name: 'Emerald', logo: '', color: '#10b981' },
-          { id: crypto.randomUUID(), name: 'Topaz', logo: '', color: '#eab308' }
-        ],
+        houses: athleticsHouses,
+        events: athleticsEvents,
         currentEvent: null,
         results: [],
-        podiumVisible: false
+        displayMode: 'live'
       } : null,
       graphicsState: {},
       replayState: {},
@@ -342,6 +532,10 @@ class SessionManager extends EventEmitter {
       sets: { home: 0, away: 0 },
       completedGames: [],
       bestOf: mode === 'volleyball' || mode === 'table-tennis' ? 5 : mode === 'badminton' ? 3 : null,
+      racketMatch: ['table-tennis', 'badminton'].includes(mode) ? {
+        format: 'singles',
+        players: { home: [], away: [] }
+      } : null,
       tableTennis: mode === 'table-tennis' ? {
         format: 'singles',
         players: { home: [], away: [] }
@@ -438,7 +632,8 @@ class SessionManager extends EventEmitter {
       id: crypto.randomUUID(),
       name,
       logo: '',
-      color: '#64748b'
+      color: '#64748b',
+      runners: []
     });
     this._persist();
     return this._copySession();
@@ -454,6 +649,22 @@ class SessionManager extends EventEmitter {
       throw new Error('House logo must be a base64 SVG, PNG, or JPEG image under 750 KB.');
     }
     house.logo = dataUrl;
+    this._persist();
+    return this._copySession();
+  }
+
+  setAthleticsHouseRunners(houseId, runners) {
+    const session = this._requireActiveSession();
+    if (session.modeId !== 'athletics') throw new Error('House runners can only be managed in an Athletics session.');
+    const house = session.athletics.houses.find(item => item.id === houseId);
+    if (!house) throw new Error('Select a house before setting its runners.');
+    if (!Array.isArray(runners)) throw new Error('Runners must be an array.');
+    const cleaned = runners.map(name => String(name).trim()).filter(Boolean);
+    if (cleaned.length > 8) throw new Error('A house can have at most 8 runners.');
+    cleaned.forEach(name => {
+      if (name.length > 80) throw new Error('Runner name must not exceed 80 characters.');
+    });
+    house.runners = cleaned;
     this._persist();
     return this._copySession();
   }
@@ -498,6 +709,28 @@ class SessionManager extends EventEmitter {
     const session = this._requireActiveSession();
     if (session.modeId !== 'athletics') throw new Error('The live Athletics event can only be changed in an Athletics session.');
     if (!input || typeof input !== 'object') throw new Error('Event details are required.');
+    if (typeof input.eventId === 'string' && input.eventId.trim()) {
+      const scheduled = session.athletics.events.find(event => event.id === input.eventId.trim());
+      if (!scheduled) throw new Error('Select an event from this Athletics session schedule.');
+      let results = scheduled.resultRequired === false
+        ? (Array.isArray(scheduled.results) ? scheduled.results : [])
+        : session.athletics.results.filter(result => result.eventId === scheduled.id);
+      if (scheduled.resultRequired === false && results.length === 0) {
+        const houseById = new Map(session.athletics.houses.map(house => [house.id, house]));
+        results = Object.entries(scheduled.athletes || {}).flatMap(([houseId, names]) => {
+          const house = houseById.get(houseId);
+          if (!house) return [];
+          if (scheduled.category === 'relay') {
+            return names.length >= 2 ? [{ id: crypto.randomUUID(), athleteName: names.join(' → '), runnerNames: names, team: house.name, result: '', place: 0, points: 0 }] : [];
+          }
+          return names.map(name => ({ id: crypto.randomUUID(), athleteName: name, runnerNames: [], team: house.name, result: '', place: 0, points: 0 }));
+        }).map((result, index) => ({ ...result, place: index + 1 }));
+      }
+      session.athletics.currentEvent = { ...scheduled, results };
+      session.athletics.displayMode = 'live';
+      this._persist();
+      return this._copySession();
+    }
     const name = typeof input.name === 'string' ? input.name.trim() : '';
     if (!name || name.length > 100) throw new Error('Event name must contain 1 to 100 characters.');
     const category = normalizeAthleticsCategory(input.category);
@@ -507,6 +740,11 @@ class SessionManager extends EventEmitter {
     if (session.athletics.currentEvent) {
       session.athletics.currentEvent.name = name;
       session.athletics.currentEvent.category = category;
+      const scheduled = session.athletics.events.find(event => event.id === session.athletics.currentEvent.id);
+      if (scheduled) {
+        scheduled.name = name;
+        scheduled.category = category;
+      }
     } else {
       session.athletics.currentEvent = { id: crypto.randomUUID(), name, category, results: [] };
     }
@@ -514,11 +752,141 @@ class SessionManager extends EventEmitter {
     return this._copySession();
   }
 
-  setAthleticsPodiumVisible(visible) {
+  setAthleticsDisplayMode(mode) {
     const session = this._requireActiveSession();
-    if (session.modeId !== 'athletics') throw new Error('The podium is only available in an Athletics session.');
-    if (typeof visible !== 'boolean') throw new Error('Podium visibility must be a boolean.');
-    session.athletics.podiumVisible = visible;
+    if (session.modeId !== 'athletics') throw new Error('Live and After views are only available in Athletics.');
+    if (!['live', 'after'].includes(mode)) throw new Error('Choose either Live or After results.');
+    session.athletics.displayMode = mode;
+    this._persist();
+    return this._copySession();
+  }
+
+  setAthleticsLiveStandings(enabled) {
+    const session = this._requireActiveSession();
+    if (session.modeId !== 'athletics' || !session.athletics.currentEvent) {
+      throw new Error('Select a live Athletics event first.');
+    }
+    if (typeof enabled !== 'boolean') throw new Error('Choose whether live standings should be shown.');
+    const event = session.athletics.currentEvent;
+    event.liveStandings = enabled;
+    const scheduled = session.athletics.events.find(item => item.id === event.id);
+    if (scheduled) scheduled.liveStandings = enabled;
+    this._persist();
+    return this._copySession();
+  }
+
+  reorderAthleticsResults(resultIds) {
+    const session = this._requireActiveSession();
+    const event = session.athletics.currentEvent;
+    if (session.modeId !== 'athletics' || !event) throw new Error('Select a live Athletics event first.');
+    if (session.athletics.displayMode === 'after') throw new Error('Return to Live mode before changing the standings.');
+    if (event.category === 'shot-put') throw new Error('Shot Put standings are ranked by each athlete’s best distance.');
+    if (!Array.isArray(resultIds) || resultIds.length !== event.results.length ||
+        new Set(resultIds).size !== resultIds.length || resultIds.some(id => !event.results.some(result => result.id === id))) {
+      throw new Error('The new standings order is invalid.');
+    }
+    const ordered = resultIds.map(id => event.results.find(result => result.id === id));
+    ordered.forEach((result, index) => {
+      result.place = index + 1;
+      result.points = event.resultRequired === false ? 0 : ({ 1: 5, 2: 3, 3: 1 }[result.place] || 0);
+    });
+    event.results = ordered;
+    if (event.resultRequired === false) {
+      const scheduled = session.athletics.events.find(item => item.id === event.id);
+      if (scheduled) scheduled.results = ordered;
+    } else {
+      session.athletics.results = session.athletics.results.filter(result => result.eventId !== event.id);
+      session.athletics.results.push(...ordered.map(result => ({ eventId: event.id, eventName: event.name, ...result })));
+    }
+    this._persist();
+    return this._copySession();
+  }
+
+  transferAthleticsBaton(resultId) {
+    const session = this._requireActiveSession();
+    const event = session.athletics.currentEvent;
+    if (session.modeId !== 'athletics' || !event || event.category !== 'relay') {
+      throw new Error('Select a live relay event first.');
+    }
+    if (session.athletics.displayMode === 'after') {
+      throw new Error('Return to Live mode before transferring the baton.');
+    }
+    const result = event.results.find(item => item.id === resultId);
+    if (!result || !Array.isArray(result.runnerNames) || result.runnerNames.length < 2) {
+      throw new Error('This relay team has no next runner to transfer to.');
+    }
+    const currentIndex = Number.isInteger(result.currentRunnerIndex) ? result.currentRunnerIndex : 0;
+    if (currentIndex >= result.runnerNames.length - 1) {
+      throw new Error('This relay team has completed all baton transfers.');
+    }
+    const runnerIndex = currentIndex + 1;
+    result.currentRunnerIndex = runnerIndex;
+    this._persist();
+    return {
+      eventId: event.id,
+      resultId,
+      runnerIndex,
+      nextRunnerName: result.runnerNames[runnerIndex],
+      complete: runnerIndex === result.runnerNames.length - 1,
+      standings: this.getAthleticsBroadcastState()
+    };
+  }
+
+  updateAthleticsResult(input) {
+    const session = this._requireActiveSession();
+    const event = session.athletics.currentEvent;
+    if (session.modeId !== 'athletics' || !event) throw new Error('Select a live Athletics event first.');
+    if (session.athletics.displayMode === 'after') throw new Error('Return to Live mode before editing results.');
+    if (event.resultRequired === false) throw new Error('This event uses roster order and does not accept timed results.');
+    if (event.category === 'shot-put') throw new Error('Correct Shot Put by saving the affected athlete’s turn again.');
+    if (!input || typeof input !== 'object') throw new Error('Result details are required.');
+    const result = event.results.find(item => item.id === input?.resultId);
+    if (!result) throw new Error('The Athletics result to edit was not found.');
+    const athleteName = typeof input.athleteName === 'string' ? input.athleteName.trim() : '';
+    const team = typeof input.team === 'string' ? input.team.trim() : '';
+    const value = typeof input.result === 'string' ? input.result.trim() : '';
+    const place = Number(input.place);
+    const runnerNames = Array.isArray(input.runnerNames)
+      ? input.runnerNames.map(name => typeof name === 'string' ? name.trim() : '').filter(Boolean)
+      : [];
+    const house = session.athletics.houses.find(item => item.name === team);
+    if (!house) throw new Error('Select a house configured for this Athletics session.');
+    if (event.category === 'relay' && event.results.some(item => item.id !== result.id && item.team === team)) {
+      throw new Error('A relay event can have one team result per house. Edit that house’s existing result instead.');
+    }
+    if (!value || value.length > 80) throw new Error('Enter a result, time, or distance.');
+    if (!Number.isInteger(place) || place < 1 || place > event.results.length) {
+      throw new Error(`Place must be between 1 and ${event.results.length}.`);
+    }
+    if (event.category === 'relay') {
+      if (runnerNames.length < 2 || runnerNames.length > 8) throw new Error('A relay needs 2 to 8 runners.');
+      const roster = event.athletes?.[house.id];
+      if (Array.isArray(roster) && (roster.length !== runnerNames.length || roster.some((name, index) => name !== runnerNames[index]))) {
+        throw new Error(`Use ${house.name}’s assigned runners in their saved handoff order.`);
+      }
+      result.runnerNames = runnerNames;
+      result.athleteName = runnerNames.join(' → ');
+    } else {
+      if (!athleteName || athleteName.length > 80) throw new Error('Choose an assigned athlete.');
+      const roster = event.athletes?.[house.id];
+      if (event.athletes && Object.keys(event.athletes).length && !Array.isArray(roster)) {
+        throw new Error(`No athletes from ${house.name} are assigned to this event.`);
+      }
+      if (Array.isArray(roster) && !roster.includes(athleteName)) throw new Error(`Choose an athlete assigned to ${house.name}.`);
+      result.athleteName = athleteName;
+      result.runnerNames = [];
+    }
+    result.team = team;
+    result.result = value;
+    event.results.sort((a, b) => a.place - b.place || (a.recordedAt || '').localeCompare(b.recordedAt || ''));
+    event.results.splice(event.results.indexOf(result), 1);
+    event.results.splice(place - 1, 0, result);
+    event.results.forEach((item, index) => {
+      item.place = index + 1;
+      item.points = ({ 1: 5, 2: 3, 3: 1 }[item.place] || 0);
+    });
+    session.athletics.results = session.athletics.results.filter(item => item.eventId !== event.id);
+    session.athletics.results.push(...event.results.map(item => ({ eventId: event.id, eventName: event.name, ...item })));
     this._persist();
     return this._copySession();
   }
@@ -530,15 +898,21 @@ class SessionManager extends EventEmitter {
     return {
       active: true,
       competition: session.competition.name,
-      podiumVisible: session.athletics.podiumVisible === true,
+      displayMode: session.athletics.displayMode === 'after' ? 'after' : 'live',
       event: event ? {
         id: event.id,
         name: event.name,
         category: event.category,
+        resultRequired: event.resultRequired !== false,
+        liveStandings: event.liveStandings !== false,
+        athletes: event.athletes || {},
+        athleteShortCodes: event.athleteShortCodes || {},
         results: event.results.map(result => ({
+          id: result.id,
           place: result.place,
           athleteName: result.athleteName,
           runnerNames: result.runnerNames || [],
+          currentRunnerIndex: Number.isInteger(result.currentRunnerIndex) ? result.currentRunnerIndex : 0,
           team: result.team,
           result: result.result,
           points: result.points,
@@ -546,9 +920,11 @@ class SessionManager extends EventEmitter {
         }))
       } : null,
       houses: session.athletics.houses.map(house => ({
+        id: house.id,
         name: house.name,
         logo: house.logo,
-        color: house.color
+        color: house.color,
+        runners: event?.athletes?.[house.id] || house.runners || []
       }))
     };
   }
@@ -558,14 +934,15 @@ class SessionManager extends EventEmitter {
     if (session.modeId !== 'athletics') throw new Error('Results can only be recorded in an Athletics session.');
     const event = session.athletics.currentEvent;
     if (!event) throw new Error('Set the live Athletics event title and category first.');
+    if (session.athletics.displayMode === 'after') throw new Error('Return to Live mode before recording results.');
+    if (event.resultRequired === false) throw new Error('This event uses roster order and does not accept timed results.');
     const participant = typeof input.participantId === 'string'
       ? session.participants.find(item => item.id === input.participantId)
       : null;
     const athleteName = participant?.name || (typeof input.athleteName === 'string' ? input.athleteName.trim() : '');
     const team = typeof input.team === 'string' ? input.team.trim() : '';
-    if (event.category === 'shot-put') {
-      return this._recordShotPutAttempt(session, event, athleteName, team, input);
-    }
+    const house = session.athletics.houses.find(item => item.name === team);
+    if (!house) throw new Error('Select a house configured for this Athletics session.');
     const result = typeof input.result === 'string' ? input.result.trim() : '';
     const place = Number(input.place);
     const points = input.points === undefined ? ({ 1: 5, 2: 3, 3: 1 }[Number(input.place)] || 0) : Number(input.points);
@@ -576,12 +953,27 @@ class SessionManager extends EventEmitter {
       if (runnerNames.length < 2 || runnerNames.length > 8 || runnerNames.some(name => name.length > 80)) {
         throw new Error('Enter 2 to 8 relay runners in running order.');
       }
+      if (event.results.some(item => item.team === team)) {
+        throw new Error('A relay event can have one team result per house.');
+      }
     } else if (!athleteName || athleteName.length > 80) {
       throw new Error('Athlete name is required.');
     }
-    if (!team || team.length > 60) throw new Error('House/team is required.');
-    if (!session.athletics.houses.some(house => house.name === team)) {
-      throw new Error('Select a house configured for this Athletics session.');
+    const roster = event.athletes?.[house.id];
+    if (event.athletes && Object.keys(event.athletes).length && !Array.isArray(roster)) {
+      throw new Error(`No athletes from ${house.name} are assigned to this event.`);
+    }
+    if (Array.isArray(roster)) {
+      const validRoster = names => names.length === roster.length && names.every((name, index) => name === roster[index]);
+      if (event.category === 'relay' && !validRoster(runnerNames)) {
+        throw new Error(`Use the assigned runners for ${house.name} in their saved handoff order.`);
+      }
+      if (event.category !== 'relay' && !roster.includes(athleteName)) {
+        throw new Error(`Choose an athlete assigned to ${house.name} for this event.`);
+      }
+    }
+    if (event.category === 'shot-put') {
+      return this._recordShotPutAttempt(session, event, athleteName, team, input);
     }
     if (!result || result.length > 80) throw new Error('Enter a result, time, or distance.');
     if (!Number.isInteger(place) || place < 1 || place > 999) throw new Error('Place must be a whole number from 1 to 999.');
@@ -606,7 +998,8 @@ class SessionManager extends EventEmitter {
 
   _recordShotPutAttempt(session, event, athleteName, team, input) {
     const attempt = Number(input.attempt);
-    const distance = Number(input.distance);
+    const isFoul = input.foul === true;
+    const distance = isFoul ? null : Number(input.distance);
     if (!athleteName || athleteName.length > 80) throw new Error('Athlete name is required.');
     if (!team || team.length > 60) throw new Error('House/team is required.');
     if (!session.athletics.houses.some(house => house.name === team)) {
@@ -615,7 +1008,7 @@ class SessionManager extends EventEmitter {
     if (!Number.isInteger(attempt) || attempt < 1 || attempt > 6) {
       throw new Error('Shot Put turn must be a whole number from 1 to 6.');
     }
-    if (!Number.isFinite(distance) || distance <= 0 || distance > 100) {
+    if (!isFoul && (!Number.isFinite(distance) || distance <= 0 || distance > 100)) {
       throw new Error('Distance must be greater than 0 and no more than 100 metres.');
     }
 
@@ -639,9 +1032,10 @@ class SessionManager extends EventEmitter {
       event.results.push(entry);
     }
     entry.attempts = Array.isArray(entry.attempts) ? entry.attempts : [];
-    entry.attempts[attempt - 1] = Number(distance.toFixed(2));
-    entry.bestDistance = Math.max(...entry.attempts.filter(Number.isFinite));
-    entry.result = `${entry.bestDistance.toFixed(2)} m`;
+    entry.attempts[attempt - 1] = isFoul ? null : Number(distance.toFixed(2));
+    const valid = entry.attempts.filter(Number.isFinite);
+    entry.bestDistance = valid.length ? Math.max(...valid) : null;
+    entry.result = entry.bestDistance ? `${entry.bestDistance.toFixed(2)} m` : '—';
 
     this._rankShotPutResults(session, event);
     this._persist();
@@ -672,6 +1066,8 @@ class SessionManager extends EventEmitter {
     const session = this._requireActiveSession();
     if (session.modeId !== 'athletics') throw new Error('Results can only be changed in an Athletics session.');
     const event = session.athletics.currentEvent;
+    if (session.athletics.displayMode === 'after') throw new Error('Return to Live mode before changing results.');
+    if (event?.resultRequired === false) throw new Error('Roster-only runners cannot be removed from the event standings.');
     const index = event?.results.findIndex(result => result.id === resultId) ?? -1;
     if (index < 0) throw new Error('The live Athletics result was not found.');
     event.results.splice(index, 1);
@@ -695,9 +1091,8 @@ class SessionManager extends EventEmitter {
       totals.set(result.team, current);
     }
     return [...totals.values()].sort((a, b) =>
-      b.points - a.points || b.medals.gold - a.medals.gold ||
-      b.medals.silver - a.medals.silver || b.medals.bronze - a.medals.bronze ||
-      a.team.localeCompare(b.team)
+      b.points - a.points || b.medals.gold - a.medals.gold || b.medals.silver - a.medals.silver ||
+      b.medals.bronze - a.medals.bronze || a.team.localeCompare(b.team)
     );
   }
 
@@ -742,8 +1137,14 @@ class SessionManager extends EventEmitter {
   }
 
   discard() {
+    const discardedId = this.activeSession?.id;
     this.activeSession = null;
     this._persist();
+    if (discardedId) {
+      const safeId = String(discardedId).replace(/[^a-zA-Z0-9_-]/g, '');
+      const sessionPath = path.join(this.sessionsDirectory, `${safeId}.json`);
+      if (fs.existsSync(sessionPath)) fs.unlinkSync(sessionPath);
+    }
     return this.getState();
   }
 

@@ -25,6 +25,8 @@ class LowerThirdGraphicsController extends EventEmitter {
     this._clearTimers();
     this.isVisible = true;
     this.currentData = {
+      noticeType: data.noticeType === 'new' ? 'new' : 'old',
+      body: data.body || '',
       title,
       subtitle,
       badge,

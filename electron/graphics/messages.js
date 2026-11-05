@@ -34,6 +34,8 @@ class MessagesManager extends EventEmitter {
   enqueue(item) {
     const queueItem = {
       id: `q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      noticeType: item.noticeType === 'new' ? 'new' : 'old',
+      body: item.body || '',
       title: item.title || 'MESSAGE',
       subtitle: item.subtitle || '',
       badge: item.badge || '',

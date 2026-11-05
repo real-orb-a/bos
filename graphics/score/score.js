@@ -24,21 +24,24 @@
   const periodBannerEl = document.getElementById('period-banner');
   const scorebug = document.getElementById('score-bug');
   const matchNameEl = document.getElementById('match-name');
-  const homeTennisTeamEl = document.getElementById('home-tennis-team');
-  const awayTennisTeamEl = document.getElementById('away-tennis-team');
+  const homeHouseSubtitleEl = document.getElementById('home-house-subtitle');
+  const awayHouseSubtitleEl = document.getElementById('away-house-subtitle');
   const athleticsPanel = document.getElementById('athletics-standings');
   const athleticsCompetitionEl = document.getElementById('athletics-competition');
   const athleticsEventEl = document.getElementById('athletics-event-title');
   const athleticsResultsEl = document.getElementById('athletics-result-list');
-  const athleticsPodiumEl = document.getElementById('athletics-podium');
-  const athleticsPodiumCompetitionEl = document.getElementById('athletics-podium-competition');
-  const athleticsPodiumEventEl = document.getElementById('athletics-podium-event');
-  const athleticsPodiumPlacesEl = document.getElementById('athletics-podium-places');
 
   let currentHomeScore = 0;
   let currentAwayScore = 0;
   let currentTimerMode = null;
   let sportScorebug = null;
+  let athleticsRankEventId = null;
+  let athleticsPreviousPlaces = new Map();
+  let athleticsExpanded = false;
+  let athleticsRelayMode = 'compact';
+  let latestAthleticsStandings = null;
+  const relayTickerStates = new Map();
+  let relayRunnerIndexes = {};
   const teamData = { home: null, away: null };
   const garnetBrand = { short: 'GAR', name: 'GARNET', logo: 'assets/houses/garnet.png' };
   const emeraldBrand = { short: 'EME', name: 'EMERALD', logo: 'assets/houses/emerald.png' };
@@ -70,10 +73,21 @@
     ).join(' ');
   }
 
-  function tableTennisPlayers(side) {
-    if (sportScorebug?.mode !== 'table-tennis') return [];
+  function racketPlayers(side) {
+    if (!['table-tennis', 'badminton'].includes(sportScorebug?.mode)) return [];
     const names = side === 'home' ? sportScorebug.homePlayers : sportScorebug.awayPlayers;
     return Array.isArray(names) ? names : [];
+  }
+
+  function racketPlayerName(player) {
+    return typeof player === 'string' ? player : String(player?.name || '');
+  }
+
+  function racketPlayerCode(player) {
+    if (player && typeof player === 'object' && player.shortCode) {
+      return String(player.shortCode).trim().slice(0, 3).toUpperCase();
+    }
+    return playerShortCode(racketPlayerName(player)).replace(/[^A-Z0-9]/gi, '').slice(0, 3).toUpperCase();
   }
 
   function updateTeamIdentity(data, side) {
@@ -87,19 +101,30 @@
     const fallbackShort = isHome ? 'GAR' : 'TOP';
     const name = data.name || fallbackName;
     const brand = resolveHouseBrand(name) || resolveHouseBrand(data.short);
-    const playerNames = tableTennisPlayers(side);
-    const isTableTennis = sportScorebug?.mode === 'table-tennis';
-    const tennisTeamEl = isHome ? homeTennisTeamEl : awayTennisTeamEl;
-    if (isTableTennis) {
-      // Compact view: player short code. Expanded view: full player name + team name below.
-      shortEl.textContent = playerNames.map(playerShortCode).join(' + ') || fallbackShort;
-      nameEl.textContent = playerNames.join(' + ') || name;
-      tennisTeamEl.textContent = name;
-      tennisTeamEl.classList.remove('hidden');
+    const playerNames = racketPlayers(side);
+    const isRacketSport = ['table-tennis', 'badminton'].includes(sportScorebug?.mode);
+    const houseSubtitleEl = isHome ? homeHouseSubtitleEl : awayHouseSubtitleEl;
+    if (isRacketSport) {
+      const teamShort = data.short || (isHome ? sportScorebug.homeShort : sportScorebug.awayShort) || brand?.short || fallbackShort;
+      shortEl.replaceChildren();
+      if (playerNames.length) {
+        playerNames.forEach(player => {
+          const badge = document.createElement('span');
+          badge.className = 'player-shortcode-badge';
+          badge.textContent = racketPlayerCode(player);
+          shortEl.appendChild(badge);
+        });
+      } else {
+        shortEl.textContent = teamShort;
+      }
+      nameEl.textContent = playerNames.map(racketPlayerName).join('   ·   ') || name;
+      houseSubtitleEl.textContent = `${name} (${teamShort})`;
+      houseSubtitleEl.classList.remove('hidden');
     } else {
+      shortEl.replaceChildren();
       shortEl.textContent = brand?.short || data.short || fallbackShort;
       nameEl.textContent = brand?.name || name;
-      tennisTeamEl.classList.add('hidden');
+      houseSubtitleEl.classList.add('hidden');
     }
     if (data.color) teamEl.style.setProperty('--team-color', data.color);
 
@@ -190,8 +215,8 @@
     scorebug.classList.toggle('volleyball-mode', sportScorebug?.mode === 'volleyball');
     scorebug.classList.toggle('volleyball-scorebug', sportScorebug?.mode === 'volleyball');
     scorebug.classList.toggle('cricket-mode', sportScorebug?.mode === 'cricket');
-    scorebug.classList.toggle('games-mode', sportScorebug?.mode === 'games');
-    scorebug.classList.toggle('table-tennis-mode', sportScorebug?.mode === 'table-tennis');
+    scorebug.classList.toggle('games-mode', ['games', 'badminton'].includes(sportScorebug?.mode));
+    scorebug.classList.toggle('racket-mode', ['table-tennis', 'badminton'].includes(sportScorebug?.mode));
     if (teamData.home) updateTeamIdentity(teamData.home, 'home');
     if (teamData.away) updateTeamIdentity(teamData.away, 'away');
     volleyballPointsEl.classList.toggle('hidden', sportScorebug?.mode !== 'volleyball');
@@ -206,7 +231,7 @@
       cricketInningsEl.textContent = sportScorebug.period.toUpperCase();
       cricketStatsEl.textContent =
         `W ${sportScorebug.homeWickets}-${sportScorebug.awayWickets} · O ${sportScorebug.homeOvers}-${sportScorebug.awayOvers}`;
-    } else if (sportScorebug?.mode === 'games') {
+    } else if (['games', 'badminton'].includes(sportScorebug?.mode)) {
       applySets(
         { homeSets: sportScorebug.homeSets, awaySets: sportScorebug.awaySets },
         'GAMES'
@@ -243,9 +268,10 @@
           if (msg.score && msg.score.sets) applySets(msg.score.sets);
           if (msg.offense) applyOffense(msg.offense);
           setScorebugVisible(msg.scorebugVisible !== false);
-          setScorebugExpanded(msg.scorebugExpanded === true);
+          setScorebugExpanded(msg.scorebugExpanded === true, msg.athleticsRelayMode);
           setScorebugMatchName(msg.scorebugMatchName || '');
           applySportScorebug(msg.sportScorebug);
+          relayRunnerIndexes = { ...(msg.athleticsRelayRunnerIndexes || {}) };
           applyAthleticsStandings(msg.athleticsStandings);
         } else if (msg.type === 'SCORE_UPDATE') {
           updateDisplay(msg, msg.animation || 'pop', msg.changedTeam);
@@ -254,11 +280,13 @@
         } else if (msg.type === 'SCOREBUG_VISIBILITY') {
           setScorebugVisible(msg.visible);
         } else if (msg.type === 'SCOREBUG_EXPANSION') {
-          setScorebugExpanded(msg.expanded);
+          setScorebugExpanded(msg.expanded, msg.athleticsRelayMode);
         } else if (msg.type === 'SCOREBUG_MATCH_NAME') {
           setScorebugMatchName(msg.name);
         } else if (msg.type === 'ATHLETICS_STANDINGS_UPDATE') {
           applyAthleticsStandings(msg.standings);
+        } else if (msg.type === 'ATHLETICS_BATON_TRANSFER') {
+          handleBatonTransfer(msg);
         } else if (msg.type === 'CLOCK_UPDATE') {
           if (msg.clock) {
             applyClock(msg.clock);
@@ -285,11 +313,15 @@
 
   function setScorebugVisible(visible) {
     scorebug.classList.toggle('faded-out', !visible);
+    athleticsPanel.classList.toggle('faded-out', !visible);
   }
 
-  function setScorebugExpanded(expanded) {
+  function setScorebugExpanded(expanded, relayMode = athleticsRelayMode) {
+    athleticsExpanded = expanded === true;
+    if (['compact', 'expanded', 'team'].includes(relayMode)) athleticsRelayMode = relayMode;
     scorebug.classList.toggle('expanded', expanded === true);
     athleticsPanel.classList.toggle('expanded', expanded === true);
+    if (latestAthleticsStandings) applyAthleticsStandings(latestAthleticsStandings);
   }
 
   function setScorebugMatchName(name) {
@@ -297,119 +329,196 @@
   }
 
   function applyAthleticsStandings(standings) {
+    latestAthleticsStandings = standings;
     const event = standings?.event;
     const active = standings?.active === true;
-    const podiumVisible = standings?.podiumVisible === true && !!event?.results?.length;
+    const eventLive = active && !!event && (standings?.displayMode === 'after' || event.liveStandings !== false);
+    const isAfter = standings?.displayMode === 'after';
     scorebug.classList.toggle('hidden', !!active);
-    athleticsPanel.classList.toggle('hidden', !active || podiumVisible);
-    athleticsPodiumEl.classList.toggle('hidden', !active || !podiumVisible);
-    if (!active) return;
+    athleticsPanel.classList.toggle('hidden', !eventLive);
+    athleticsPanel.classList.toggle('after-results', isAfter);
+    athleticsPanel.classList.toggle('roster-only', event?.resultRequired === false);
+    if (!active) {
+      clearRelayTickerStates(new Set());
+      return;
+    }
 
-    athleticsCompetitionEl.textContent = standings.competition || 'ATHLETICS';
-    athleticsEventEl.textContent = event?.name || 'AWAITING EVENT';
-    athleticsPodiumCompetitionEl.textContent = standings.competition || 'ATHLETICS';
-    athleticsPodiumEventEl.textContent = event?.name || '';
+    const eventLabel = event?.name || (event?.resultRequired === false ? 'RACE ORDER' : 'EVENT STANDINGS');
+    athleticsCompetitionEl.textContent = `${isAfter ? 'AFTER' : 'LIVE'} · ${event?.category === 'relay' ? 'BATON RELAY' : 'EVENT STANDINGS'}`;
+    athleticsEventEl.textContent = standings?.competition || eventLabel;
+    const previousTops = new Map([...athleticsResultsEl.querySelectorAll('.athletics-result[data-result-id]')]
+      .map(row => [row.dataset.resultId, row.getBoundingClientRect().top]));
     athleticsResultsEl.replaceChildren();
     const houses = new Map((standings.houses || []).map(house => [house.name, house]));
     const results = [...(event?.results || [])].sort((a, b) => a.place - b.place);
-    results.slice(0, 8).forEach(result => {
+    if (event?.id !== athleticsRankEventId) {
+      athleticsRankEventId = event?.id || null;
+      athleticsPreviousPlaces = new Map();
+    }
+    const nextPlaces = new Map();
+    const activeRelayIds = new Set();
+    results.forEach(result => nextPlaces.set(result.id, result.place));
+    // Compact mode changes spacing, not the amount of the live race shown.
+    results.forEach(result => {
       const row = document.createElement('div');
       row.className = 'athletics-result';
+      row.dataset.resultId = result.id;
+      const oldPlace = athleticsPreviousPlaces.get(result.id);
+      const movement = oldPlace === undefined || oldPlace === result.place ? '' : result.place < oldPlace ? 'up' : 'down';
+      if (movement) row.classList.add(`rank-moved-${movement}`);
       const place = document.createElement('span');
       place.className = 'athletics-place';
       place.textContent = String(result.place);
+      if (movement) {
+        place.dataset.movement = movement;
+        place.title = movement === 'up' ? 'Moved up' : 'Moved down';
+        setTimeout(() => {
+          delete place.dataset.movement;
+          row.classList.remove(`rank-moved-${movement}`);
+        }, 1000);
+      }
       row.appendChild(place);
 
       const house = houses.get(result.team);
+      const mark = document.createElement('span');
+      mark.className = 'athletics-team-color';
+      mark.classList.toggle('has-logo', !!house?.logo);
+      mark.style.backgroundColor = house?.color || '#64748b';
+      mark.title = `${result.team || 'Team'} color`;
+      row.appendChild(mark);
       if (house?.logo) {
         const logo = document.createElement('img');
         logo.className = 'athletics-house-logo';
         logo.src = house.logo;
-        logo.alt = `${house.name} logo`;
+        logo.alt = '';
+        logo.title = house.name || result.team;
         row.appendChild(logo);
-      } else if (resolveHouseBrand(house?.name || result.team)) {
-        const logo = document.createElement('img');
-        logo.className = 'athletics-house-logo';
-        logo.src = resolveHouseBrand(house?.name || result.team).logo;
-        logo.alt = `${house?.name || result.team} logo`;
-        row.appendChild(logo);
-      } else {
-        const mark = document.createElement('span');
-        mark.className = 'athletics-house-logo fallback';
-        mark.textContent = house?.name?.slice(0, 1).toUpperCase() || '?';
-        mark.style.backgroundColor = house?.color || '#64748b';
-        row.appendChild(mark);
       }
 
       const athlete = document.createElement('div');
       athlete.className = 'athletics-athlete';
       const runners = Array.isArray(result.runnerNames) ? result.runnerNames : [];
-      if (runners.length) {
-        runners.forEach((runner, index) => {
-          if (index > 0) {
-            const handoff = document.createElement('span');
-            handoff.className = 'athletics-handoff';
-            handoff.textContent = '›';
-            athlete.appendChild(handoff);
-          }
-          const runnerName = document.createElement('span');
-          runnerName.className = 'athletics-runner';
-          runnerName.textContent = runner;
-          athlete.appendChild(runnerName);
-        });
+      const athleteCodes = event?.athleteShortCodes?.[house?.id] || {};
+      const codeFor = name => athleticsExpanded ? name : athleteCodes[name] || athleteCodeFallback(name);
+      if (event?.category === 'relay' && runners.length) {
+        activeRelayIds.add(result.id);
+        renderRelayDisplay(athlete, result.id, runners, name => athleteCodes[name] || athleteCodeFallback(name), athleticsRelayMode);
+      } else if (runners.length) {
+        athlete.textContent = runners.map(codeFor).join(' · ');
+        athlete.title = runners.join(' → ');
       } else {
-        athlete.textContent = result.athleteName;
+        athlete.textContent = codeFor(result.athleteName);
+        athlete.title = result.athleteName || '';
       }
       row.appendChild(athlete);
-      const houseName = document.createElement('span');
-      houseName.className = 'athletics-house-name';
-      houseName.textContent = result.team;
-      row.appendChild(houseName);
       const value = document.createElement('span');
-      value.className = 'athletics-result-value';
-      value.textContent = result.result;
-      row.appendChild(value);
+      if (event?.resultRequired !== false) {
+        value.className = 'athletics-result-value';
+        value.textContent = result.result;
+        row.appendChild(value);
+      }
       athleticsResultsEl.appendChild(row);
     });
+    clearRelayTickerStates(activeRelayIds);
+    athleticsPreviousPlaces = nextPlaces;
     if (!results.length) {
       const empty = document.createElement('div');
       empty.className = 'athletics-empty';
       empty.textContent = event ? 'AWAITING EVENT RESULTS' : 'SELECT AN EVENT IN ATHLETICS CONTROL';
       athleticsResultsEl.appendChild(empty);
-    } else if (results.length > 8) {
-      const more = document.createElement('div');
-      more.className = 'athletics-empty';
-      more.textContent = `${results.length - 8} MORE RESULTS`;
-      athleticsResultsEl.appendChild(more);
     }
-    athleticsPodiumPlacesEl.replaceChildren();
-    const podiumResults = [2, 1, 3].map(place => results.find(result => result.place === place));
-    podiumResults.forEach((result, index) => {
-      const placeNumber = [2, 1, 3][index];
-      const house = result ? houses.get(result.team) : null;
-      const step = document.createElement('article');
-      step.className = `podium-step podium-place-${placeNumber}`;
-      step.style.setProperty('--house-color', house?.color || '#475569');
-      const houseLogo = house?.logo || resolveHouseBrand(house?.name)?.logo;
-      if (houseLogo) step.style.setProperty('--house-logo', `url("${houseLogo}")`);
-      const identity = document.createElement('div');
-      identity.className = 'podium-identity';
-      if (result) {
-        const runner = document.createElement('strong');
-        runner.textContent = (result.runnerNames || []).join(' › ') || result.athleteName;
-        const team = document.createElement('span');
-        team.textContent = result.team;
-        identity.append(runner, team);
-      } else {
-        const awaiting = document.createElement('strong');
-        awaiting.textContent = 'AWAITING RESULT';
-        identity.appendChild(awaiting);
-      }
-      const place = document.createElement('b');
-      place.textContent = String(placeNumber);
-      step.append(identity, place);
-      athleticsPodiumPlacesEl.appendChild(step);
+    athleticsResultsEl.querySelectorAll('.athletics-result[data-result-id]').forEach(row => {
+      const oldTop = previousTops.get(row.dataset.resultId);
+      if (oldTop === undefined) return;
+      const offset = oldTop - row.getBoundingClientRect().top;
+      if (Math.abs(offset) > 1) row.animate(
+        [{ transform: `translateY(${offset}px)` }, { transform: 'translateY(0)' }],
+        { duration: 420, easing: 'cubic-bezier(.2,.75,.25,1)' }
+      );
     });
+  }
+
+  function renderRelayDisplay(athlete, resultId, runners, codeFor, mode) {
+    let state = relayTickerStates.get(resultId);
+    if (!state || state.runners.join('\u0000') !== runners.join('\u0000')) {
+      state = { index: relayRunnerIndexes[resultId] || 0, runners: [...runners], transferId: 0 };
+      relayTickerStates.set(resultId, state);
+    }
+    state.runners = [...runners];
+    state.index = ((relayRunnerIndexes[resultId] ?? state.index) % runners.length + runners.length) % runners.length;
+    state.codeFor = codeFor;
+    state.mode = mode;
+    athlete.classList.add(`athletics-relay-${mode}`);
+    athlete.replaceChildren();
+    state.runnerEls = [];
+    if (mode === 'team') {
+      runners.forEach((name, index) => {
+        const runnerEl = document.createElement('span');
+        runnerEl.className = 'athletics-runner athletics-relay-team-runner';
+        runnerEl.textContent = name;
+        runnerEl.title = name;
+        runnerEl.classList.toggle('current', index === state.index);
+        state.runnerEls.push(runnerEl);
+        athlete.appendChild(runnerEl);
+      });
+    } else {
+      const runner = document.createElement('span');
+      runner.className = 'athletics-relay-current';
+      const shownRunner = runners[state.index];
+      runner.textContent = mode === 'compact' ? codeFor(shownRunner) : shownRunner;
+      runner.title = shownRunner;
+      state.runnerEls.push(runner);
+      athlete.appendChild(runner);
+    }
+  }
+
+  function handleBatonTransfer(message) {
+    if (message.eventId !== latestAthleticsStandings?.event?.id) return;
+    const state = relayTickerStates.get(message.resultId);
+    if (!state || !state.runnerEls?.length) return;
+    const targetIndex = Number(message.runnerIndex);
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= state.runners.length) return;
+    const previousIndex = state.index;
+    const outgoing = state.runnerEls[state.mode === 'team' ? previousIndex : 0];
+    if (!outgoing?.isConnected) return;
+    state.arrowEl?.remove();
+    const arrow = document.createElement('span');
+    arrow.className = 'athletics-relay-transfer passing';
+    arrow.setAttribute('aria-label', `Baton transferred to ${state.runners[targetIndex]}`);
+    arrow.appendChild(document.createTextNode('➜ '));
+    const incomingName = document.createElement('strong');
+    incomingName.className = 'athletics-relay-incoming';
+    incomingName.textContent = state.mode === 'compact' ? state.codeFor(state.runners[targetIndex]) : state.runners[targetIndex];
+    arrow.appendChild(incomingName);
+    const resultRow = outgoing.closest('.athletics-result') || athlete;
+    resultRow.appendChild(arrow);
+    state.arrowEl = arrow;
+    outgoing.classList.add('passing-out');
+    const transferId = ++state.transferId;
+    setTimeout(() => {
+      if (state.transferId !== transferId) return;
+      relayRunnerIndexes[message.resultId] = targetIndex;
+      state.index = targetIndex;
+      if (latestAthleticsStandings) applyAthleticsStandings(latestAthleticsStandings);
+      const arriving = state.mode === 'team' ? state.runnerEls[targetIndex] : state.runnerEls[0];
+      arriving?.animate?.(
+        [{ opacity: 0.15, transform: 'translateX(24px)' }, { opacity: 1, transform: 'translateX(0)' }],
+        { duration: 420, easing: 'cubic-bezier(.2,.75,.25,1)' }
+      );
+      setTimeout(() => arrow.remove(), 260);
+    }, 620);
+  }
+
+  function clearRelayTickerStates(activeIds) {
+    for (const resultId of relayTickerStates.keys()) {
+      if (!activeIds.has(resultId)) relayTickerStates.delete(resultId);
+    }
+  }
+
+  function athleteCodeFallback(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    return (parts.length > 1 ? parts.map(part => part[0]).join('') : (parts[0] || '').slice(0, 3))
+      .replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() || 'ATH';
   }
 
   connectWebSocket();

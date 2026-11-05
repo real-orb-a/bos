@@ -80,8 +80,20 @@ async function initializeApp() {
   transitionsController = new TransitionsController(obsClient, configManager);
 
   graphicsEngine = new GraphicsEngine(configManager, scoreManager, matchEngine);
+  graphicsEngine.setRemoteAthleticsReorderHandler(resultIds => {
+    const standings = sessionManager.getAthleticsBroadcastState();
+    if (!standings.active || !standings.event || standings.displayMode === 'after' || standings.event.category === 'shot-put') {
+      throw new Error('Return to a live running event to change its race order.');
+    }
+    sessionManager.reorderAthleticsResults(resultIds);
+    return graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
+  });
+  graphicsEngine.setRemoteAthleticsBatonTransferHandler(resultId =>
+    sessionManager.transferAthleticsBaton(resultId)
+  );
   if (recovery.recoverable) {
-    graphicsEngine.setScorebugVisible(!['athletics', 'formal-event'].includes(recovery.activeSession.modeId));
+    graphicsEngine.setScorebugVisible(recovery.activeSession.modeId !== 'formal-event');
+    if (recovery.activeSession.modeId === 'athletics') graphicsEngine.resetAthleticsScorebug();
     graphicsEngine.setAthleticsStandings(sessionManager.getAthleticsBroadcastState());
     graphicsEngine.setScorebugMatchName(recovery.activeSession.competition.name);
     graphicsEngine.setSportScorebugState(recovery.activeSession);

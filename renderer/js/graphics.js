@@ -11,6 +11,11 @@ window.GraphicsModule = (function() {
   const inputLtDuration = document.getElementById('input-lt-duration');
   const selectLtPosition = document.getElementById('select-lt-position');
   const inputLtColor = document.getElementById('input-lt-color');
+  const noticeType = document.getElementById('select-notice-type');
+  const messageZone = document.getElementById('select-message-zone');
+  const noticeBody = document.getElementById('input-notice-body');
+  const newNoticeField = document.getElementById('new-notice-field');
+  const oldNoticeFields = document.getElementById('old-notice-fields');
 
   const btnShowLowerthird = document.getElementById('btn-show-lowerthird');
   const btnQueueLowerthird = document.getElementById('btn-queue-lowerthird');
@@ -20,6 +25,7 @@ window.GraphicsModule = (function() {
 
   function init() {
     bindEvents();
+    noticeType.dispatchEvent(new Event('change'));
     loadPresets();
     loadQueue();
     listenIpc();
@@ -27,12 +33,18 @@ window.GraphicsModule = (function() {
   }
 
   function bindEvents() {
+    noticeType.addEventListener('change', () => {
+      const isNew = noticeType.value === 'new';
+      newNoticeField.classList.toggle('hidden', !isNew);
+      oldNoticeFields.classList.toggle('hidden', isNew);
+    });
     btnShowLowerthird.addEventListener('click', () => {
       showCurrentMessage();
     });
 
     btnHideLowerthird.addEventListener('click', () => {
       window.bosAPI.graphics.hideLowerThird();
+      window.bosAPI.graphics.hideTopMessage();
     });
 
     btnQueueLowerthird.addEventListener('click', () => {
@@ -47,12 +59,16 @@ window.GraphicsModule = (function() {
   }
 
   function getFormData() {
+    const isNew = noticeType.value === 'new';
+    const zone = messageZone.value;
     return {
-      title: inputLtTitle.value.trim() || 'MESSAGE',
+      noticeType: isNew ? 'new' : 'old',
+      body: isNew ? noticeBody.value.trim() : '',
+      title: isNew ? '' : (inputLtTitle.value.trim() || 'MESSAGE'),
       subtitle: inputLtSubtitle.value.trim(),
       value: inputLtValue.value.trim(),
       duration: Math.max(0, parseInt(inputLtDuration.value, 10) || 0),
-      position: selectLtPosition.value,
+      position: zone === 'top' ? `top-${selectLtPosition.value.replace('bottom-', '')}` : selectLtPosition.value,
       style: 'standard',
       color: inputLtColor.value || '#eab308'
     };
@@ -60,7 +76,14 @@ window.GraphicsModule = (function() {
 
   function showCurrentMessage() {
     const data = getFormData();
-    window.bosAPI.graphics.showLowerThird(data);
+    if (data.noticeType === 'new' && !data.body) return;
+    if (messageZone.value === 'top') {
+      window.bosAPI.graphics.hideLowerThird();
+      window.bosAPI.graphics.showTopMessage(data);
+    } else {
+      window.bosAPI.graphics.hideTopMessage();
+      window.bosAPI.graphics.showLowerThird(data);
+    }
   }
 
   async function loadPresets() {
@@ -82,14 +105,26 @@ window.GraphicsModule = (function() {
           inputLtSubtitle.value = p.subtitle || '';
           inputLtDuration.value = p.duration;
           // Immediately show preset on air
-          window.bosAPI.graphics.showLowerThird({
+          const data = {
             title: p.title,
             subtitle: p.subtitle,
             duration: p.duration,
             style: 'standard',
-            position: selectLtPosition.value,
+            noticeType: 'old',
+            position: messageZone.value === 'top' ? `top-${selectLtPosition.value.replace('bottom-', '')}` : selectLtPosition.value,
             color: inputLtColor.value || '#eab308'
-          });
+          };
+          noticeType.value = 'old';
+          noticeType.dispatchEvent(new Event('change'));
+          inputLtTitle.value = p.title;
+          inputLtSubtitle.value = p.subtitle || '';
+          if (messageZone.value === 'top') {
+            window.bosAPI.graphics.hideLowerThird();
+            window.bosAPI.graphics.showTopMessage(data);
+          } else {
+            window.bosAPI.graphics.hideTopMessage();
+            window.bosAPI.graphics.showLowerThird(data);
+          }
         });
         presetContainer.appendChild(btn);
       });

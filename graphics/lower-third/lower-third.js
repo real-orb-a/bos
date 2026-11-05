@@ -2,6 +2,7 @@
   const lt = document.getElementById('lower-third');
   const titleEl = document.getElementById('lt-title');
   const subtitleEl = document.getElementById('lt-subtitle');
+  const bodyEl = document.getElementById('lt-body');
   const badgeText = document.getElementById('badge-text');
   const valueEl = document.getElementById('lt-value');
   const sideEl = document.querySelector('.lt-side');
@@ -12,6 +13,8 @@
     titleEl.textContent = data.title || 'MESSAGE';
     subtitleEl.textContent = data.subtitle || '';
     subtitleEl.style.display = data.subtitle ? 'block' : 'none';
+    bodyEl.textContent = data.body || '';
+    bodyEl.style.display = data.noticeType === 'new' ? 'block' : 'none';
 
     // Right-hand highlight block: small label (badge) + big accent value.
     badgeText.textContent = data.badge || '';
@@ -23,6 +26,7 @@
 
     // Reset positions and styles
     lt.className = 'lower-third';
+    lt.classList.toggle('new-notice', data.noticeType === 'new');
     lt.classList.add(data.position || 'bottom-left');
     if (data.style) lt.classList.add(`style-${data.style}`);
 

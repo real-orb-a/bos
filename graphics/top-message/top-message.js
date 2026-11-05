@@ -2,6 +2,7 @@
   const tm = document.getElementById('top-message');
   const titleEl = document.getElementById('tm-title');
   const subtitleEl = document.getElementById('tm-subtitle');
+  const bodyEl = document.getElementById('tm-body');
   const badgeText = document.getElementById('badge-text');
   const valueEl = document.getElementById('tm-value');
   const sideEl = document.querySelector('.tm-side');
@@ -13,6 +14,8 @@
     titleEl.textContent = data.title || 'MESSAGE';
     subtitleEl.textContent = data.subtitle || '';
     subtitleEl.style.display = data.subtitle ? 'block' : 'none';
+    bodyEl.textContent = data.body || '';
+    bodyEl.style.display = data.noticeType === 'new' ? 'block' : 'none';
 
     // Right-hand highlight block: small label (badge) + big accent value.
     badgeText.textContent = data.badge || '';
@@ -26,6 +29,7 @@
     // bottom-* (lower-third positions) — map those to the top zone, defaulting
     // to top-center like the race-control banner.
     tm.className = 'top-message';
+    tm.classList.toggle('new-notice', data.noticeType === 'new');
     let pos = data.position || 'top-center';
     pos = pos.replace(/^bottom-/, 'top-');
     if (pos !== 'top-left' && pos !== 'top-center' && pos !== 'top-right') {

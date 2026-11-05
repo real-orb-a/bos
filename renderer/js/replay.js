@@ -9,6 +9,10 @@ window.ReplayModule = (function() {
   const requestDetail = document.getElementById('replay-request-detail');
   const sourceButtons = document.getElementById('replay-source-buttons');
   const btnSaveReplay = document.getElementById('btn-save-replay');
+  const goReplaySceneButtons = [
+    document.getElementById('btn-go-replay-scene'),
+    document.getElementById('session-go-replay-scene')
+  ].filter(Boolean);
   let triggerResetTimer = null;
 
   function init() {
@@ -21,6 +25,35 @@ window.ReplayModule = (function() {
     btnSaveReplay.addEventListener('click', () => {
         doCapture({ all: true });
     });
+    goReplaySceneButtons.forEach(button => button.addEventListener('click', () => goToReplayScene(button)));
+  }
+
+  async function goToReplayScene(button) {
+    button.disabled = true;
+    try {
+      const scenes = await window.bosAPI.config.get('scenes') || {};
+      const sceneName = scenes.replayScene || 'REPLAY';
+      const switched = await window.bosAPI.obs.switchScene(sceneName);
+      if (!switched) throw new Error(`Could not switch to the “${sceneName}” scene. Check OBS connection and scene name.`);
+      requestText.textContent = `REPLAY SCENE ACTIVE · ${sceneName}`;
+      requestDetail.textContent = 'Program scene changed in OBS.';
+      const sessionFeedback = document.getElementById('session-ops-feedback');
+      if (sessionFeedback) {
+        sessionFeedback.textContent = `Switched to the ${sceneName} replay scene.`;
+        sessionFeedback.classList.remove('error');
+      }
+    } catch (error) {
+      const sessionFeedback = document.getElementById('session-ops-feedback');
+      if (button.id === 'session-go-replay-scene' && sessionFeedback) {
+        sessionFeedback.textContent = error.message || 'Could not switch to the replay scene.';
+        sessionFeedback.classList.add('error');
+      } else {
+        requestText.textContent = 'REPLAY SCENE SWITCH FAILED';
+        requestDetail.textContent = error.message || 'Could not switch to the replay scene.';
+      }
+    } finally {
+      button.disabled = false;
+    }
   }
 
   async function doCapture(options) {

@@ -163,13 +163,32 @@ const api = {
     clearQueue: () => ipcRenderer.invoke('graphics:clearQueue'),
     triggerGoalAnimation: (team, options) => ipcRenderer.invoke('graphics:triggerGoalAnimation', { team, options }),
     triggerTransition: (data) => ipcRenderer.invoke('graphics:triggerTransition', data),
+    getServerStatus: () => ipcRenderer.invoke('graphics:getServerStatus'),
+    setServerPort: (port) => ipcRenderer.invoke('graphics:setServerPort', port),
+    onServerStatusChanged: (callback) => {
+      const cb = (_, status) => callback(status);
+      ipcRenderer.on('graphics:serverStatusChanged', cb);
+      return () => ipcRenderer.removeListener('graphics:serverStatusChanged', cb);
+    },
     getScorebugVisible: () => ipcRenderer.invoke('graphics:getScorebugVisible'),
     setScorebugVisible: (visible) => ipcRenderer.invoke('graphics:setScorebugVisible', visible),
     setScorebugExpanded: (expanded) => ipcRenderer.invoke('graphics:setScorebugExpanded', expanded),
+    setAthleticsRelayMode: mode => ipcRenderer.invoke('graphics:setAthleticsRelayMode', mode),
+    transferAthleticsBaton: resultId => ipcRenderer.invoke('graphics:transferAthleticsBaton', resultId),
     getScreenCenterScorebugVisible: () =>
       ipcRenderer.invoke('graphics:getScreenCenterScorebugVisible'),
     setScreenCenterScorebugVisible: (visible) =>
       ipcRenderer.invoke('graphics:setScreenCenterScorebugVisible', visible),
+    onScreenCenterScorebugChanged: (callback) => {
+      const cb = (_, visible) => callback(visible);
+      ipcRenderer.on('graphics:screenCenterScorebugChanged', cb);
+      return () => ipcRenderer.removeListener('graphics:screenCenterScorebugChanged', cb);
+    },
+    onScorebugVisibilityChanged: (callback) => {
+      const cb = (_, visible) => callback(visible);
+      ipcRenderer.on('graphics:scorebugVisibilityChanged', cb);
+      return () => ipcRenderer.removeListener('graphics:scorebugVisibilityChanged', cb);
+    },
     getRemoteControlInfo: () => ipcRenderer.invoke('graphics:getRemoteControlInfo'),
     setRemoteControlPassword: (password) => ipcRenderer.invoke('graphics:setRemoteControlPassword', password),
     setRemoteImmediateScore: (enabled) => ipcRenderer.invoke('graphics:setRemoteImmediateScore', enabled),
@@ -247,10 +266,15 @@ const api = {
     addAthleticsHouse: (name) => ipcRenderer.invoke('session:addAthleticsHouse', { name }),
     setAthleticsHouseLogo: (houseId, dataUrl) =>
       ipcRenderer.invoke('session:setAthleticsHouseLogo', { houseId, dataUrl }),
+    setAthleticsHouseRunners: (houseId, runners) =>
+      ipcRenderer.invoke('session:setAthleticsHouseRunners', { houseId, runners }),
     updateSportState: patch => ipcRenderer.invoke('session:updateSportState', patch),
     applyScoreChange: (side, amount) => ipcRenderer.invoke('session:applyScoreChange', { side, amount }),
     setAthleticsEvent: input => ipcRenderer.invoke('session:setAthleticsEvent', input),
-    setAthleticsPodiumVisible: visible => ipcRenderer.invoke('session:setAthleticsPodiumVisible', visible),
+    setAthleticsDisplayMode: mode => ipcRenderer.invoke('session:setAthleticsDisplayMode', mode),
+    setAthleticsLiveStandings: enabled => ipcRenderer.invoke('session:setAthleticsLiveStandings', enabled),
+    reorderAthleticsResults: resultIds => ipcRenderer.invoke('session:reorderAthleticsResults', resultIds),
+    updateAthleticsResult: input => ipcRenderer.invoke('session:updateAthleticsResult', input),
     recordAthleticsResult: input => ipcRenderer.invoke('session:recordAthleticsResult', input),
     removeAthleticsResult: resultId => ipcRenderer.invoke('session:removeAthleticsResult', resultId),
     getAthleticsStandings: () => ipcRenderer.invoke('session:getAthleticsStandings'),
